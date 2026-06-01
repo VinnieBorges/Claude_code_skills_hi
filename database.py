@@ -12,6 +12,12 @@ DB_PATH = os.path.join(DB_DIR, "vinicut.db")
 WATCH_DIR = os.path.join(BASE_DIR, "watch")
 AUTO_CUTS_DIR = os.path.join(BASE_DIR, "auto_cuts")
 
+# Default self-learning transcription prompt (seed + "reset to default" target).
+DEFAULT_WHISPER_PROMPT = (
+    "Transcribe the audio accurately. Focus on punctuation, capitalization, and "
+    "correct spelling of technical terms or brand names like Hidratei."
+)
+
 def init_db():
     """Initializes the required directories and SQLite database tables."""
     # Task 1: Create local directory structure
@@ -150,7 +156,7 @@ def init_db():
     # Prepopulate default system prompts
     cursor.execute("INSERT OR IGNORE INTO system_prompts (component, prompt_text) VALUES (?, ?)", (
         "whisper",
-        "Transcribe the audio accurately. Focus on punctuation, capitalization, and correct spelling of technical terms or brand names like Hidratei."
+        DEFAULT_WHISPER_PROMPT
     ))
     
     cursor.execute("INSERT OR IGNORE INTO system_prompts (component, prompt_text) VALUES (?, ?)", (
@@ -242,6 +248,26 @@ def log_subtitle_correction(project_id, segment_index, start_time, end_time, ori
     """, (project_id, segment_index, start_time, end_time, original_text, corrected_text))
     conn.commit()
     conn.close()
+
+def get_subtitle_corrections(limit=100):
+    """Returns recent subtitle corrections (newest first) for the telemetry UI."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, project_id, segment_index, original_text, corrected_text, created_at
+        FROM subtitle_corrections
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0], "project_id": r[1], "segment_index": r[2],
+            "original_text": r[3], "corrected_text": r[4], "created_at": r[5],
+        }
+        for r in rows
+    ]
 
 def run_self_improvement_loop(project_id):
     """Runs the self-improvement loop using Ollama Gemma-4 to update system prompts based on subtitle corrections."""

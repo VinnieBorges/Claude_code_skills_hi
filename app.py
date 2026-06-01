@@ -308,6 +308,38 @@ with col_left:
         st.markdown(f'<div class="status-terminal">{log_text}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # Agent Co-Pilot: Whisper self-learning memory (view / edit / override)
+    with st.expander("🧠 Agent Co-Pilot — Whisper Memory", expanded=False):
+        st.caption("The self-learning transcription prompt Whisper uses, refined from your subtitle corrections.")
+        current_prompt = database.get_system_prompt("whisper")
+        edited_prompt = st.text_area(
+            "Whisper system prompt", value=current_prompt, height=160, key="whisper_prompt_edit"
+        )
+        c_save, c_reset = st.columns(2)
+        with c_save:
+            if st.button("💾 Save override", key="save_whisper_prompt"):
+                database.update_system_prompt("whisper", (edited_prompt or "").strip())
+                st.success("Whisper prompt saved.")
+        with c_reset:
+            if st.button("↩️ Reset to default", key="reset_whisper_prompt"):
+                database.update_system_prompt("whisper", database.DEFAULT_WHISPER_PROMPT)
+                st.session_state.pop("whisper_prompt_edit", None)
+                st.rerun()
+
+        st.markdown("---")
+        corrections = database.get_subtitle_corrections(limit=50)
+        st.caption(f"Corrections logged (these drive the self-improvement loop): {len(corrections)}")
+        if corrections:
+            st.dataframe(
+                [
+                    {"Original": c["original_text"], "Corrected": c["corrected_text"], "When": c["created_at"]}
+                    for c in corrections
+                ],
+                use_container_width=True,
+            )
+        else:
+            st.info("No subtitle corrections logged yet. Edit subtitles before rendering to teach Whisper.")
+
 # Run Slicing Pipeline
 if st.session_state.status == "analyzing":
     log("Step 1: Analyzing keyframes sequentially with Ollama Vision...")
