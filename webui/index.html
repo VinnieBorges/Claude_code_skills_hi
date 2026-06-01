@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ViniCut-AI // Studio</title>
+<style>
+  :root{
+    --bg:#0e0e14; --panel:#171722; --panel2:#1a1a26; --line:#2a2a3e;
+    --txt:#d8d8e2; --muted:#8f90a6; --accent:#00e5ff; --accent2:#6c5ce7;
+    --ok:#22c98e; --warn:#f5a623; --err:#ff5470; --chip:#222234;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',Inter,system-ui,sans-serif;font-size:14px}
+  a{color:var(--accent);text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  .btn{background:linear-gradient(135deg,#00b4db,#0083b0);color:#fff;border:1px solid #00c6e0;border-radius:7px;padding:9px 16px;font-weight:600;transition:.15s;box-shadow:0 2px 10px rgba(0,229,255,.15)}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,229,255,.35)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+  .btn.alt{background:linear-gradient(135deg,#a29bfe,#6c5ce7);border-color:#a29bfe}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);box-shadow:none}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+  .topbar{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(14,14,20,.92);backdrop-filter:blur(8px);z-index:30}
+  .logo{font-weight:800;font-size:18px;color:var(--accent);letter-spacing:.5px}
+  .logo small{display:block;font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+  .spacer{flex:1}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 4px 22px rgba(0,0,0,.25)}
+  h2{margin:0 0 12px;font-size:15px;color:var(--accent);font-weight:700}
+  h3{margin:0 0 8px;font-size:13px;color:#c7c8d8}
+  .muted{color:var(--muted)}
+  label.fld{display:block;margin:10px 0 4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  select,input[type=text],input[type=number],textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:8px 10px;font-family:inherit;font-size:13px}
+  textarea{resize:vertical}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:0}
+  /* dropzone */
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:34px;text-align:center;transition:.15s;cursor:pointer;color:var(--muted)}
+  .drop.hover{border-color:var(--accent);background:rgba(0,229,255,.05);color:var(--accent)}
+  .drop b{color:var(--txt)}
+  /* project grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;transition:.15s;position:relative}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .card .fn{font-weight:600;word-break:break-word;margin-right:22px}
+  .card .meta{font-size:11px;color:var(--muted);margin-top:6px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .pill.pending,.pill.queued{background:#33343f;color:#c9cad8}
+  .pill.analyzing,.pill.rendering{background:rgba(245,166,35,.18);color:var(--warn)}
+  .pill.completed,.pill.reviewed{background:rgba(34,201,142,.18);color:var(--ok)}
+  .pill.failed{background:rgba(255,84,112,.18);color:var(--err)}
+  .card .cb{position:absolute;top:12px;right:12px;width:16px;height:16px;cursor:pointer}
+  /* timeline */
+  .tl{position:relative;height:46px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;cursor:pointer;user-select:none}
+  .tl .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;text-shadow:1px 1px 2px rgba(0,0,0,.5);overflow:hidden;white-space:nowrap}
+  .tl .seg.hook{background:linear-gradient(90deg,#00b4db,#0083b0)}
+  .tl .seg.demo{background:linear-gradient(90deg,#6c5ce7,#a29bfe)}
+  .tl .seg.cta{background:linear-gradient(90deg,#ff007f,#ff4d9d)}
+  .tl .ph{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 8px #fff;left:0;pointer-events:none}
+  video{width:100%;border-radius:8px;background:#000;display:block}
+  .order-list{display:flex;flex-direction:column;gap:6px}
+  .order-item{display:flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+  .order-item .nm{flex:1;font-weight:600}
+  .seg-edit{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--panel2)}
+  .seg-edit .tt{display:flex;gap:8px;margin-bottom:6px}
+  .seg-edit .tt input{flex:1}
+  .out{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2);margin-bottom:12px}
+  .out .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .out .hd .nm{font-weight:700;flex:1}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  .toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
+  .toast{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);padding:11px 15px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:340px;animation:slide .2s}
+  .toast.err{border-left-color:var(--err)} .toast.ok{border-left-color:var(--ok)}
+  @keyframes slide{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px}
+  .spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hide{display:none!important}
+  .two{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+  @media(max-width:880px){.two{grid-template-columns:1fr}}
+  .tag{font-size:11px;color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:30px}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">🎬 ViniCut-AI <small>Studio</small></div>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" id="backBtn" onclick="goHome()" style="display:none">← Projects</button>
+    <button class="btn ghost sm" onclick="openSettings()">⚙ Settings</button>
+  </div>
+  <div class="wrap" id="view"></div>
+  <div class="toast-wrap" id="toasts"></div>
+
+<script>
+"use strict";
+/* ---------------- API ---------------- */
+const API = {
+  async req(url, opts){
+    const r = await fetch(url, opts);
+    if(!r.ok){ let m='HTTP '+r.status; try{const d=await r.json(); m=d.detail||m;}catch(e){} throw new Error(m); }
+    const ct = r.headers.get('content-type')||''; return ct.includes('json') ? r.json() : r;
+  },
+  projects(){ return this.req('/api/projects'); },
+  project(id){ return this.req('/api/projects/'+id); },
+  settings(){ return this.req('/api/settings'); },
+  saveSettings(s){ return this.req('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:s})}); },
+  fonts(){ return this.req('/api/fonts'); },
+  render(id,p){ return this.req('/api/projects/'+id+'/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); },
+  aiPreset(id,prompt){ return this.req('/api/projects/'+id+'/generate-subtitle-preset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})}); },
+};
+const STYLES = ["Bold Yellow","Clean White","Minimalist","TikTok Bold","Cyberpunk Neon","Netflix Pop","Retro Yellow"];
+const TRANSITIONS = ["none","fade","dissolve","fade_black","fade_white","zoom_blur","slideleft","wipeleft","circleopen","radial","pixelize"];
+const ANIMS = ["none","fade","pop","bounce"];
+
+/* ---------------- helpers ---------------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const view = $('#view');
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(t){ t=Math.max(0,t||0); const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
+function toast(msg, kind=''){ const t=document.createElement('div'); t.className='toast '+kind; t.textContent=msg; $('#toasts').appendChild(t); setTimeout(()=>t.remove(), kind==='err'?6000:3500); }
+function dl(url){ const a=document.createElement('a'); a.href=url; a.download=''; document.body.appendChild(a); a.click(); a.remove(); }
+
+let poll=null;
+function stopPoll(){ if(poll){ clearInterval(poll); poll=null; } }
+function goHome(){ stopPoll(); location.hash=''; renderHome(); }
+
+/* ---------------- HOME ---------------- */
+let selected = new Set();
+async function renderHome(){
+  $('#backBtn').style.display='none';
+  selected = new Set();
+  view.innerHTML = `
+    <div class="panel">
+      <h2>📥 Import UGC Footage</h2>
+      <div class="drop" id="drop"><b>Drag &amp; drop</b> video(s) here, or click to browse<div class="tag" style="margin-top:6px">mp4 · mov · avi · mkv — bulk supported</div></div>
+      <input type="file" id="file" accept=".mp4,.mov,.avi,.mkv" multiple style="display:none" />
+    </div>
+    <div class="panel">
+      <div style="display:flex;align-items:center"><h2 style="flex:1">🎞️ Projects</h2>
+        <button class="btn alt sm" id="zipBtn" disabled onclick="bulkZip()">⬇ Download ZIP (0)</button>
+      </div>
+      <div id="projects"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+    </div>`;
+  const drop=$('#drop'), file=$('#file');
+  drop.onclick=()=>file.click();
+  file.onchange=()=>doUpload([...file.files]);
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('hover');};
+  drop.ondragleave=()=>drop.classList.remove('hover');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('hover');doUpload([...e.dataTransfer.files]);};
+  await loadProjects();
+  poll = setInterval(loadProjects, 3500);
+}
+async function doUpload(files){
+  files = files.filter(f=>/\.(mp4|mov|avi|mkv)$/i.test(f.name));
+  if(!files.length){ toast('No supported video files.','err'); return; }
+  try{
+    const fd=new FormData();
+    if(files.length===1){ fd.append('file',files[0]); await API.req('/api/upload',{method:'POST',body:fd}); }
+    else{ files.forEach(f=>fd.append('files',f)); await API.req('/api/upload-bulk',{method:'POST',body:fd}); }
+    toast(`Uploaded ${files.length} file(s) — queued for processing.`,'ok');
+    loadProjects();
+  }catch(e){ toast('Upload failed: '+e.message,'err'); }
+}
+async function loadProjects(){
+  let list; try{ list=await API.projects(); }catch(e){ return; }
+  const box=$('#projects'); if(!box) return;
+  if(!list.length){ box.innerHTML='<div class="empty">No projects yet — drop a video above to get started.</div>'; return; }
+  box.innerHTML = `<div class="grid">${list.map(p=>`
+    <div class="card" onclick="openProject(${p.id})">
+      <input type="checkbox" class="cb" onclick="event.stopPropagation();toggleSel(${p.id},this.checked)" ${selected.has(p.id)?'checked':''}/>
+      <div class="fn">${esc(p.filename)}</div>
+      <div class="meta">#${p.id} · ${esc((p.created_at||'').replace('T',' ').split('.')[0])}</div>
+      <div style="margin-top:8px"><span class="pill ${esc(p.status)}">${esc(p.status)}</span></div>
+    </div>`).join('')}</div>`;
+}
+function toggleSel(id,on){ on?selected.add(id):selected.delete(id); const b=$('#zipBtn'); if(b){ b.disabled=selected.size===0; b.textContent=`⬇ Download ZIP (${selected.size})`; } }
+async function bulkZip(){
+  if(!selected.size) return;
+  try{
+    const r=await fetch('/api/projects/download-zip-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_ids:[...selected]})});
+    if(!r.ok) throw new Error((await r.json()).detail||r.status);
+    const blob=await r.blob(); const u=URL.createObjectURL(blob); dl(u); setTimeout(()=>URL.revokeObjectURL(u),10000);
+  }catch(e){ toast('ZIP failed: '+e.message,'err'); }
+}
+
+/* ---------------- DETAIL ---------------- */
+let cur=null;            // current project object
+let curOrder=["Hook","Demo","CTA"];
+async function openProject(id){
+  stopPoll(); location.hash='p'+id;
+  $('#backBtn').style.display='';
+  view.innerHTML='<div class="panel"><div class="empty"><span class="spinner"></span> Loading project…</div></div>';
+  await refreshDetail(id, true);
+  poll = setInterval(async ()=>{ if(cur && ['pending','queued','analyzing','rendering'].includes(cur.status)) await refreshDetail(id,false); }, 3500);
+}
+async function refreshDetail(id, full){
+  let p; try{ p=await API.project(id); }catch(e){ toast('Load failed: '+e.message,'err'); return; }
+  const prevStatus = cur && cur.status;
+  cur=p;
+  if(full || !$('#detail')) drawDetail(p);
+  else { // light updates while processing
+    const sp=$('#statusPill'); if(sp){ sp.className='pill '+p.status; sp.textContent=p.status; }
+    if(prevStatus && prevStatus!=='completed' && p.status==='completed'){ drawDetail(p); toast('Render complete ✓','ok'); }
+  }
+}
+function drawDetail(p){
+  const processing = ['pending','queued','analyzing','rendering'].includes(p.status);
+  const sm = p.segments_map || {};
+  const hasAnalysis = !!(p.transcript && p.transcript.length);
+  view.innerHTML = `
+  <div id="detail">
+    <div class="panel">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h2 style="flex:1;margin:0">${esc(p.filename)}</h2>
+        <span class="pill ${p.status}" id="statusPill">${esc(p.status)}</span>
+        <button class="btn alt sm" onclick="dl('/api/projects/${p.id}/download-zip')">⬇ All cuts (ZIP)</button>
+      </div>
+    </div>
+    <div class="two">
+      <div>
+        <div class="panel">
+          <h3>📺 Source preview</h3>
+          <video id="player" src="/raw/${encodeURIComponent(p.filename)}" controls preload="metadata"></video>
+          <div class="tl" id="tl" title="Click to seek">${tlBands(sm)}<div class="ph" id="ph"></div></div>
+          <div class="tag" id="tlabel" style="margin-top:6px">0:00 / 0:00</div>
+        </div>
+        <div class="panel" id="outputs">${processing?progressHtml(p):outputsHtml(p)}</div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3>🎬 Render settings</h3>
+          <div class="row">
+            <div><label class="fld">Style preset</label>${selectHtml('st_style',STYLES,p.style_preset)}</div>
+            <div><label class="fld">Font</label><select id="st_font"><option>${esc(p.font_family||'Montserrat')}</option></select></div>
+          </div>
+          <div class="row">
+            <div><label class="fld">Transition</label>${selectHtml('st_trans',TRANSITIONS,'fade')}</div>
+            <div><label class="fld">Caption animation</label>${selectHtml('st_anim',ANIMS,'none')}</div>
+          </div>
+          <label class="fld"><input type="checkbox" id="st_zoom" ${(p.zoom_effect??1)?'checked':''} style="width:auto"/> Retention zoom on Hook/CTA</label>
+          <label class="fld">Clip order</label>
+          <div class="order-list" id="order"></div>
+          <label class="fld">AI style from a prompt</label>
+          <div class="tt" style="display:flex;gap:8px">
+            <input type="text" id="st_prompt" placeholder="e.g. bold neon pink, big bounce"/>
+            <button class="btn ghost sm" onclick="genPreset()">✨</button>
+          </div>
+          <div style="margin-top:14px"><button class="btn" id="renderBtn" onclick="doRender()" ${hasAnalysis?'':'disabled'}>🔥 ${hasAnalysis?'Render / Re-render':'Waiting for analysis…'}</button></div>
+        </div>
+        <div class="panel">
+          <h3>✏️ Subtitles ${hasAnalysis?`<span class="tag">(${p.transcript.length} segments)</span>`:''}</h3>
+          <div id="subs">${hasAnalysis?'':'<div class="muted">Transcription appears here once analysis finishes.</div>'}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  // populate dynamic bits
+  curOrder=["Hook","Demo","CTA"]; drawOrder();
+  if(hasAnalysis) drawSubs(p.transcript);
+  loadFontsInto(p.font_family);
+  // sync transition/animation selects from global settings
+  API.settings().then(s=>{ const t=$('#st_trans'),a=$('#st_anim'); if(t&&s.transition_style&&TRANSITIONS.includes(s.transition_style))t.value=s.transition_style; if(a&&s.subtitle_animation&&ANIMS.includes(s.subtitle_animation))a.value=s.subtitle_animation; }).catch(()=>{});
+  setupTimeline(sm);
+}
+function progressHtml(p){ return `<h3>⏳ Processing</h3><div class="muted"><span class="spinner"></span> Status: <b>${esc(p.status)}</b>. Analysis &amp; cuts are running in the queue — this view updates automatically.</div>`; }
+function tlBands(sm){
+  const h=sm.hook||[0,0], d=sm.demo||[0,0], c=sm.cta||[0,0];
+  const total = Math.max(c[1]||0, d[1]||0, h[1]||0) || 1;
+  const w=(a)=>((a[1]-a[0])/total*100).toFixed(3)+'%';
+  return `<div class="seg hook" style="width:${w(h)}">Hook</div><div class="seg demo" style="width:${w(d)}">Demo</div><div class="seg cta" style="width:${w(c)}">CTA</div>`;
+}
+function setupTimeline(sm){
+  const v=$('#player'), tl=$('#tl'), ph=$('#ph'), lab=$('#tlabel'); if(!v||!tl) return;
+  let total = Math.max((sm.cta||[0,0])[1]||0,(sm.demo||[0,0])[1]||0,(sm.hook||[0,0])[1]||0)||0;
+  v.addEventListener('loadedmetadata',()=>{ if(isFinite(v.duration)&&v.duration>0) total=v.duration; });
+  v.addEventListener('timeupdate',()=>{ const T=total||v.duration||1; ph.style.left=Math.min(100,v.currentTime/T*100)+'%'; lab.textContent=fmt(v.currentTime)+' / '+fmt(T); });
+  tl.addEventListener('click',e=>{ const T=total||v.duration||0; if(!T) return; const r=tl.getBoundingClientRect(); v.currentTime=Math.max(0,Math.min(T,(e.clientX-r.left)/r.width*T)); });
+}
+function selectHtml(id,opts,val){ return `<select id="${id}">${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`; }
+function drawOrder(){
+  const box=$('#order'); if(!box) return;
+  box.innerHTML=curOrder.map((nm,i)=>`<div class="order-item"><span class="tag">${i+1}</span><span class="nm">${esc(nm)}</span>
+    <button class="btn ghost sm" ${i===0?'disabled':''} onclick="moveOrder(${i},-1)">↑</button>
+    <button class="btn ghost sm" ${i===curOrder.length-1?'disabled':''} onclick="moveOrder(${i},1)">↓</button></div>`).join('');
+}
+function moveOrder(i,d){ const j=i+d; if(j<0||j>=curOrder.length)return; const a=curOrder.slice(); [a[i],a[j]]=[a[j],a[i]]; curOrder=a; drawOrder(); }
+let subState=[];
+function drawSubs(transcript){
+  subState = transcript.map(s=>({start:+s.start,end:+s.end,text:s.text,words:s.words||null,orig:s.text}));
+  const box=$('#subs'); if(!box) return;
+  box.innerHTML = subState.map((s,i)=>`<div class="seg-edit">
+      <div class="tt"><input type="number" step="0.1" value="${s.start.toFixed(2)}" onchange="subState[${i}].start=parseFloat(this.value)"/>
+      <input type="number" step="0.1" value="${s.end.toFixed(2)}" onchange="subState[${i}].end=parseFloat(this.value)"/></div>
+      <textarea rows="2" onchange="subState[${i}].text=this.value">${esc(s.text)}</textarea>
+    </div>`).join('');
+}
+async function loadFontsInto(current){
+  const sel=$('#st_font'); if(!sel) return;
+  const defaults=['Montserrat','Arial','Impact','Bebas Neue','Roboto','Oswald'];
+  let custom=[]; try{ custom=(await API.fonts()).map(f=>f.family_name); }catch(e){}
+  const all=[...new Set([current||'Montserrat',...defaults,...custom])];
+  sel.innerHTML=all.map(f=>`<option ${f===(current||'Montserrat')?'selected':''}>${esc(f)}</option>`).join('');
+}
+async function genPreset(){
+  const prompt=$('#st_prompt').value.trim(); if(!prompt){ toast('Describe a style first.','err'); return; }
+  toast('Generating style with AI…');
+  try{ await API.aiPreset(cur.id, prompt); toast('Custom style saved — it will be used on next render.','ok'); }
+  catch(e){ toast('Style gen failed: '+e.message,'err'); }
+}
+async function doRender(){
+  if(!cur) return;
+  const btn=$('#renderBtn'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Rendering…';
+  try{
+    // persist transition + caption animation (read by the render pipeline)
+    await API.saveSettings({ transition_style:$('#st_trans').value, subtitle_animation:$('#st_anim').value });
+    const transcript = subState.map(s=>{ const o={start:s.start,end:s.end,text:s.text}; if(s.words && s.text===s.orig) o.words=s.words; return o; });
+    await API.render(cur.id, { transcript, style_preset:$('#st_style').value, order:curOrder, font_family:$('#st_font').value, zoom_effect:$('#st_zoom').checked?1:0 });
+    toast('Render started — outputs will refresh when ready.','ok');
+    cur.status='rendering'; const sp=$('#statusPill'); if(sp){sp.className='pill rendering';sp.textContent='rendering';}
+    $('#outputs').innerHTML=progressHtml(cur);
+    stopPoll(); poll=setInterval(()=>refreshDetail(cur.id,false),3500);
+  }catch(e){ toast('Render failed: '+e.message,'err'); }
+  finally{ btn.disabled=false; btn.innerHTML='🔥 Render / Re-render'; }
+}
+function outputsHtml(p){
+  const cuts=p.cuts||{}, ai=p.ai_montages||[];
+  const std=[['5s','5s Hook'],['15s','15s Pitch'],['30s','30s Ad'],['60s','60s Full'],['custom','Custom order']];
+  let html='<h3>🎬 Outputs</h3>';
+  const have = std.filter(([k])=>cuts[k]||cuts[k+'_raw']);
+  if(!have.length && !ai.length){ return html+'<div class="muted">No cuts yet. Hit Render, or wait for the auto-pipeline.</div>'; }
+  html+=have.map(([k,lab])=>{
+    const sub=cuts[k], raw=cuts[k+'_raw'];
+    const prev = sub?('/cuts/'+encodeURIComponent(sub)) : (raw?('/cuts/'+encodeURIComponent(raw)):null);
+    return `<div class="out"><div class="hd"><span class="nm">${lab}</span></div>
+      ${prev?`<video src="${prev}" controls preload="none"></video>`:''}
+      <div class="btnrow" style="margin-top:8px">
+        ${sub?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download/${k}/true')">⬇ Subbed</button>`:''}
+        ${raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download/${k}/false')">⬇ Raw</button>`:''}
+      </div></div>`;
+  }).join('');
+  if(ai.length){
+    html+='<h3 style="margin-top:14px">🤖 AI montages</h3>';
+    html+=ai.map(m=>{
+      const prev=m.filename_subbed?('/cuts/'+encodeURIComponent(m.filename_subbed)):(m.filename_raw?('/cuts/'+encodeURIComponent(m.filename_raw)):null);
+      const nm=encodeURIComponent(m.name);
+      return `<div class="out"><div class="hd"><span class="nm">${esc(m.name)}</span></div>
+        <div class="tag" style="margin-bottom:6px">${esc(m.description||'')} · order: ${esc((m.order||[]).join(' → '))}</div>
+        ${prev?`<video src="${prev}" controls preload="none"></video>`:''}
+        <div class="btnrow" style="margin-top:8px">
+          ${m.filename_subbed?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/true')">⬇ Subbed</button>`:''}
+          ${m.filename_raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/false')">⬇ Raw</button>`:''}
+        </div></div>`;
+    }).join('');
+  }
+  return html;
+}
+
+/* ---------------- SETTINGS ---------------- */
+async function openSettings(){
+  let s={}; try{ s=await API.settings(); }catch(e){}
+  const m=document.createElement('div'); m.className='modal-bg'; m.onclick=e=>{if(e.target===m)m.remove();};
+  m.innerHTML=`<div class="modal">
+    <div style="display:flex"><h2 style="flex:1">⚙ System settings</h2><button class="btn ghost sm" onclick="this.closest('.modal-bg').remove()">✕</button></div>
+    <label class="fld">Vision model</label><input type="text" id="se_vision" value="${esc(s.vision_model||'')}"/>
+    <label class="fld">Edit model (Gemma)</label><input type="text" id="se_edit" value="${esc(s.edit_model||'')}"/>
+    <label class="fld">Whisper model</label><input type="text" id="se_whisper" value="${esc(s.whisper_model||'')}"/>
+    <div class="row"><div><label class="fld">Default transition</label>${selectHtml('se_trans',TRANSITIONS,s.transition_style||'fade')}</div>
+    <div><label class="fld">Default caption animation</label>${selectHtml('se_anim',ANIMS,s.subtitle_animation||'none')}</div></div>
+    <label class="fld">Whisper prompt (auto-learned — read-only here)</label><textarea id="se_prompt" rows="4" readonly style="opacity:.75">${esc(s.whisper_prompt||'')}</textarea>
+    <label class="fld">Upload custom font (.ttf/.otf)</label><input type="file" id="se_font" accept=".ttf,.otf"/>
+    <div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="saveSettings(this)">💾 Save</button>
+    <button class="btn ghost" onclick="this.closest('.modal-bg').remove()">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(m);
+  $('#se_font').onchange=async function(){ if(!this.files[0])return; const fd=new FormData(); fd.append('file',this.files[0]); try{ const r=await API.req('/api/fonts',{method:'POST',body:fd}); toast('Font added: '+(r.family_name||''),'ok'); }catch(e){ toast('Font upload failed: '+e.message,'err'); } };
+}
+async function saveSettings(btn){
+  const s={ vision_model:$('#se_vision').value, edit_model:$('#se_edit').value, whisper_model:$('#se_whisper').value,
+            transition_style:$('#se_trans').value, subtitle_animation:$('#se_anim').value };
+  try{
+    await API.saveSettings(s);
+    toast('Settings saved.','ok'); btn.closest('.modal-bg').remove();
+  }catch(e){ toast('Save failed: '+e.message,'err'); }
+}
+
+/* ---------------- boot ---------------- */
+(function(){
+  const h=location.hash;
+  if(h.startsWith('#p')){ const id=parseInt(h.slice(2),10); if(id) return openProject(id); }
+  renderHome();
+})();
+</script>
+</body>
+</html>

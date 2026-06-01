@@ -1091,9 +1091,13 @@ def upload_bg_music(project_id: int, file: UploadFile = File(...)):
 app.mount("/raw", StaticFiles(directory=database.RAW_DIR), name="raw")
 app.mount("/cuts", StaticFiles(directory=database.CUTS_DIR), name="cuts")
 
-# Serve React static assets
+# Serve the web UI. Prefer the zero-build single-page UI in ./webui; fall back
+# to a built React app in ./frontend/dist if present.
+webui_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui")
 frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
-if os.path.exists(frontend_dist):
+if os.path.exists(webui_dir):
+    app.mount("/", StaticFiles(directory=webui_dir, html=True), name="static")
+elif os.path.exists(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
 
 if __name__ == "__main__":
