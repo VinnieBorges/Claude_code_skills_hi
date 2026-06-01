@@ -1,6 +1,38 @@
 import os
 import subprocess
-import winreg
+
+try:
+    import winreg
+except ImportError:  # non-Windows: module still importable for tooling/tests
+    winreg = None
+
+# ---------------------------------------------------------------------------
+# Binary configuration (portability)
+# ---------------------------------------------------------------------------
+# Allow overriding the ffmpeg/ffprobe binaries via environment variables so the
+# project is not hard-locked to one machine's PATH. Falls back to the names on
+# PATH, which get_ffmpeg_env() augments on Windows.
+FFMPEG_BIN = os.environ.get("VINICUT_FFMPEG", "ffmpeg")
+FFPROBE_BIN = os.environ.get("VINICUT_FFPROBE", "ffprobe")
+
+
+def run_command(args, desc="ffmpeg", check=True):
+    """
+    Runs an external command as an argument list (shell=False) so that file
+    paths containing spaces or shell metacharacters (%, &, (), !, ...) are
+    passed literally and can never be reinterpreted by the shell.
+
+    Returns the CompletedProcess. When check=True, raises RuntimeError with the
+    captured stderr on a non-zero exit so failures are never silent.
+    """
+    result = subprocess.run(args, capture_output=True, text=True, env=get_ffmpeg_env())
+    if check and result.returncode != 0:
+        raise RuntimeError(
+            f"{desc} failed (exit {result.returncode}).\n"
+            f"stderr:\n{(result.stderr or '').strip()}"
+        )
+    return result
+
 
 def format_ass_time(seconds):
     """Formats seconds into ASS time format H:MM:SS.cs"""
@@ -264,9 +296,23 @@ def generate_ass_file(segments, style_preset, output_path, font_family="Montserr
     return output_path
 
 def get_ffmpeg_env():
-    """Builds clean environment with refreshed path for FFmpeg."""
+    """
+    Builds a clean environment with a refreshed PATH for FFmpeg.
+
+    On Windows it merges the machine + user PATH from the registry (so freshly
+    installed tools are visible without a reboot) and appends the WinGet links
+    dir. On other platforms it returns the current environment unchanged.
+    """
     env = os.environ.copy()
-    winget_links = r"C:\Users\Administrador\AppData\Local\Microsoft\WinGet\Links"
+
+    # Only the Windows registry dance applies on nt; elsewhere just use PATH.
+    if os.name != "nt" or winreg is None:
+        return env
+
+    winget_links = os.path.join(
+        os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"),
+        "Microsoft", "WinGet", "Links"
+    )
 
     try:
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment") as key:
@@ -299,7 +345,7 @@ def get_ffmpeg_env():
     return env
 
 def escape_ass_path(path):
-    """Escapes ASS file path for Windows FFMPEG subtitles filter."""
+    """Escapes ASS file path for the FFmpeg subtitles filter (filtergraph syntax)."""
     path = path.replace("\\", "/")
     if ":" in path:
         path = path.replace(":", "\\:")
@@ -315,19 +361,29 @@ def render_subtitles(video_path, ass_path, output_path):
 
     if os.path.exists(fonts_dir) and os.listdir(fonts_dir):
         escaped_fonts = fonts_dir.replace(":", "\\:")
-        command = f'ffmpeg -i "{video_path}" -vf "subtitles=\'{escaped_ass}\':fontsdir=\'{escaped_fonts}\'" -c:v h264_nvenc -preset p4 -c:a aac -b:a 192k -y "{output_path}"'
+        vf = f"subtitles='{escaped_ass}':fontsdir='{escaped_fonts}'"
     else:
-        command = f'ffmpeg -i "{video_path}" -vf "subtitles=\'{escaped_ass}\'" -c:v h264_nvenc -preset p4 -c:a aac -b:a 192k -y "{output_path}"'
+        vf = f"subtitles='{escaped_ass}'"
 
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
-    if result.returncode != 0:
-        raise Exception(f"FFmpeg error burning subtitles: {result.stderr}")
+    args = [
+        FFMPEG_BIN, "-i", video_path,
+        "-vf", vf,
+        "-c:v", "h264_nvenc", "-preset", "p4",
+        "-c:a", "aac", "-b:a", "192k",
+        "-y", output_path,
+    ]
+    run_command(args, desc="Subtitle burn")  # raises with stderr on failure
     return output_path
 
 def get_video_duration(video_path):
     """Helper to get video duration using ffprobe."""
-    command = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{video_path}"'
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
+    args = [
+        FFPROBE_BIN, "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        video_path,
+    ]
+    result = run_command(args, desc="ffprobe duration", check=False)
     if result.returncode == 0:
         try:
             return float(result.stdout.strip())
@@ -412,7 +468,7 @@ def get_smart_cut_point(start_time, target_end_time, segments, total_duration):
 
     return min(target_end_time, total_duration)
 
-def make_semantic_cut(video_path, segments_map, target_duration, output_path, segments=None, zoom_effect=1, bg_music_path=None, transition=None, transition_duration=None):
+def make_semantic_cut(video_path, segments_map, target_duration, output_path, segments=None, zoom_effect=1, bg_music_path=None, transition=None, transition_duration=None, total_dur=None):
     """
     Cuts and merges segments from video_path according to semantic parts to match target_duration.
     segments_map = {
@@ -420,6 +476,10 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         'demo': (start, end),
         'cta': (start, end)
     }
+
+    total_dur:
+        Optional pre-computed source duration. When provided we skip an ffprobe
+        call (the caller usually already knows it).
 
     transition / transition_duration:
         When `transition` resolves to a real xfade effect (e.g. "fade",
@@ -429,10 +489,12 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         Note: xfade overlaps clips, so the output is shorter than the nominal
         target by roughly (num_slices - 1) * transition_duration.
     """
-    total_dur = get_video_duration(video_path)
+    if total_dur is None:
+        total_dur = get_video_duration(video_path)
+    use_bg = bool(bg_music_path and os.path.exists(bg_music_path))
     if total_dur <= target_duration:
         # Video is shorter than target, just output it directly with optional bg music mixing
-        if bg_music_path and os.path.exists(bg_music_path):
+        if use_bg:
             filter_parts = [
                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v_scale]",
                 f"[1:a]atrim=0:{total_dur},asetpts=PTS-STARTPTS[bg_raw]",
@@ -440,10 +502,20 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
                 "[0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[a]"
             ]
             filter_graph = "; ".join(filter_parts)
-            command = f'ffmpeg -i "{video_path}" -stream_loop -1 -i "{bg_music_path}" -filter_complex "{filter_graph}" -map "[v_scale]" -map "[a]" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
+            args = [
+                FFMPEG_BIN, "-i", video_path, "-stream_loop", "-1", "-i", bg_music_path,
+                "-filter_complex", filter_graph, "-map", "[v_scale]", "-map", "[a]",
+                "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+            ]
         else:
-            command = f'ffmpeg -i "{video_path}" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
-        subprocess.run(command, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
+            args = [
+                FFMPEG_BIN, "-i", video_path,
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+            ]
+        res = run_command(args, desc=f"Direct transcode ({target_duration}s)", check=False)
+        if res.returncode != 0:
+            print(f"[render_engine] Direct transcode failed for {output_path}:\n{(res.stderr or '').strip()}")
         return output_path
 
     hook = segments_map.get("hook", (0.0, min(5.0, total_dur)))
@@ -535,29 +607,58 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         filter_parts.append(concat_str)
 
     # Handle background audio ducking if present
-    if bg_music_path and os.path.exists(bg_music_path):
+    if use_bg:
         filter_parts.append(f"[1:a]atrim=0:{actual_slices_duration},asetpts=PTS-STARTPTS[bg_raw]")
         filter_parts.append(f"[bg_raw][a_concat]sidechaincompress=threshold=0.15:ratio=4:attack=50:release=300,volume=0.15[bg_ducked]")
         filter_parts.append(f"[a_concat][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[a]")
 
         filter_graph = "; ".join(filter_parts)
-        command = f'ffmpeg -i "{video_path}" -stream_loop -1 -i "{bg_music_path}" -filter_complex "{filter_graph}" -map "[v_concat]" -map "[a]" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
+        args = [
+            FFMPEG_BIN, "-i", video_path, "-stream_loop", "-1", "-i", bg_music_path,
+            "-filter_complex", filter_graph, "-map", "[v_concat]", "-map", "[a]",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+        ]
     else:
         filter_graph = "; ".join(filter_parts)
-        command = f'ffmpeg -i "{video_path}" -filter_complex "{filter_graph}" -map "[v_concat]" -map "[a_concat]" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
+        args = [
+            FFMPEG_BIN, "-i", video_path,
+            "-filter_complex", filter_graph, "-map", "[v_concat]", "-map", "[a_concat]",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+        ]
 
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
+    result = run_command(args, desc=f"Semantic cut ({target_duration}s)", check=False)
     if result.returncode != 0:
-        # Fallback to simple clip cutting if complex filter fails
-        if bg_music_path and os.path.exists(bg_music_path):
-            command_fallback = f'ffmpeg -ss 0 -i "{video_path}" -stream_loop -1 -i "{bg_music_path}" -t {target_duration} -filter_complex "[1:a]volume=0.1[bg];[0:a][bg]amix=inputs=2:duration=first[a]" -map 0:v -map "[a]" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
+        # Surface the real failure (previously this was silent), then fall back
+        # to a head clip so the pipeline still produces *something*.
+        print(
+            f"[render_engine] Semantic cut failed for {target_duration}s; "
+            f"falling back to a head clip. FFmpeg stderr:\n{(result.stderr or '').strip()}"
+        )
+        if use_bg:
+            fallback_args = [
+                FFMPEG_BIN, "-ss", "0", "-i", video_path, "-stream_loop", "-1", "-i", bg_music_path,
+                "-t", str(target_duration),
+                "-filter_complex", "[1:a]volume=0.1[bg];[0:a][bg]amix=inputs=2:duration=first[a]",
+                "-map", "0:v", "-map", "[a]",
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+            ]
         else:
-            command_fallback = f'ffmpeg -ss 0 -i "{video_path}" -t {target_duration} -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v h264_nvenc -preset p4 -c:a aac -y "{output_path}"'
-        subprocess.run(command_fallback, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
+            fallback_args = [
+                FFMPEG_BIN, "-ss", "0", "-i", video_path, "-t", str(target_duration),
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", output_path,
+            ]
+        fb = run_command(fallback_args, desc=f"Fallback head clip ({target_duration}s)", check=False)
+        if fb.returncode != 0:
+            print(
+                f"[render_engine] Fallback head clip ALSO failed for {target_duration}s. "
+                f"FFmpeg stderr:\n{(fb.stderr or '').strip()}"
+            )
 
     return output_path
 
-def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None):
+def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None):
     """
     Slices segments, concatenates them in custom order, shifts subtitles (including word timestamps), and burns them.
 
@@ -567,9 +668,11 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
         same per-boundary overlap so burned captions stay in sync after the shorter,
         overlapped concatenation.
     """
-    total_dur = get_video_duration(video_path)
+    if total_dur is None:
+        total_dur = get_video_duration(video_path)
     if total_dur <= 0:
         total_dur = 30.0
+    use_bg = bool(bg_music_path and os.path.exists(bg_music_path))
 
     hook = segments_map.get("hook", [0.0, min(5.0, total_dur)])
     demo = segments_map.get("demo", [hook[1], max(hook[1], total_dur - 5.0)])
@@ -762,20 +865,26 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
     temp_video = os.path.join(temp_dir, f"temp_reorder_{os.path.basename(output_path)}")
 
     # Integrate sidechain background music ducking on reordered segments
-    if bg_music_path and os.path.exists(bg_music_path):
+    if use_bg:
         filter_parts.append(f"[1:a]atrim=0:{actual_slices_duration},asetpts=PTS-STARTPTS[bg_raw]")
         filter_parts.append(f"[bg_raw][a_concat]sidechaincompress=threshold=0.15:ratio=4:attack=50:release=300,volume=0.15[bg_ducked]")
         filter_parts.append(f"[a_concat][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[a]")
 
         filter_graph = "; ".join(filter_parts)
-        command = f'ffmpeg -i "{video_path}" -stream_loop -1 -i "{bg_music_path}" -filter_complex "{filter_graph}" -map "[v_concat]" -map "[a]" -c:v h264_nvenc -preset p4 -c:a aac -y "{temp_video}"'
+        args = [
+            FFMPEG_BIN, "-i", video_path, "-stream_loop", "-1", "-i", bg_music_path,
+            "-filter_complex", filter_graph, "-map", "[v_concat]", "-map", "[a]",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", temp_video,
+        ]
     else:
         filter_graph = "; ".join(filter_parts)
-        command = f'ffmpeg -i "{video_path}" -filter_complex "{filter_graph}" -map "[v_concat]" -map "[a_concat]" -c:v h264_nvenc -preset p4 -c:a aac -y "{temp_video}"'
+        args = [
+            FFMPEG_BIN, "-i", video_path,
+            "-filter_complex", filter_graph, "-map", "[v_concat]", "-map", "[a_concat]",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-c:a", "aac", "-y", temp_video,
+        ]
 
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, env=get_ffmpeg_env())
-    if result.returncode != 0:
-        raise Exception(f"FFmpeg error concatenating segments: {result.stderr}")
+    run_command(args, desc="Reorder concat")  # raises with stderr on failure
 
     # Generate shifted subtitles ASS file
     if subtitle_segments:
