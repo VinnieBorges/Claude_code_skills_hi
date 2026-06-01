@@ -163,6 +163,8 @@ def sequential_queue_worker():
 
             # Step 5: Render AI custom variations (subbed & raw) for 5s, 15s, 30s, and 60s targets
             import shutil
+            transition_style, transition_duration = processor.get_transition_settings()
+            animation, fade_ms = processor.get_subtitle_animation_settings()
             for var in ai_data["variations"]:
                 var_name = var["name"]
                 var_desc = var["description"]
@@ -180,37 +182,50 @@ def sequential_queue_worker():
                     raw_filename = f"project_{project_id}_ai_montage_{safe_name}_{dur}s_raw.mp4"
                     raw_path = os.path.join(database.CUTS_DIR, raw_filename)
                     
-                    # Render subbed version
+                    # Render the raw concat ONCE (word-snapped) and capture its
+                    # slice plan; derive the subbed version by burning shifted
+                    # captions onto that short clip instead of concatenating twice.
+                    plan = None
                     try:
-                        render_engine.render_custom_reordered_cut(
+                        _, plan = render_engine.render_custom_reordered_cut(
                             video_path,
                             segments_map,
                             var_order,
                             transcription,
                             resolved_preset,
-                            sub_path,
-                            target_duration=dur,
-                            total_dur=total_dur
-                        )
-                    except Exception as re_sub:
-                        print(f"Error rendering AI subbed variation {dur_name}: {re_sub}")
-                        sub_path = ""
-                        
-                    # Render raw version
-                    try:
-                        render_engine.render_custom_reordered_cut(
-                            video_path,
-                            segments_map,
-                            var_order,
-                            None,
-                            resolved_preset,
                             raw_path,
                             target_duration=dur,
-                            total_dur=total_dur
+                            total_dur=total_dur,
+                            transition=transition_style,
+                            transition_duration=transition_duration,
+                            animation=animation,
+                            fade_ms=fade_ms,
+                            burn=False,
+                            return_slices=True
                         )
                     except Exception as re_raw:
                         print(f"Error rendering AI raw variation {dur_name}: {re_raw}")
                         raw_path = ""
+
+                    if plan is not None and raw_path:
+                        try:
+                            shifted = render_engine.shift_subtitles_for_slices(
+                                transcription, plan["slices"], plan["use_xfade"], plan["trans_d"]
+                            )
+                            if shifted:
+                                sub_ass = sub_path + ".ass"
+                                render_engine.generate_ass_file(
+                                    shifted, resolved_preset, sub_ass,
+                                    animation=animation, fade_ms=fade_ms
+                                )
+                                render_engine.render_subtitles(raw_path, sub_ass, sub_path)
+                            else:
+                                shutil.copy2(raw_path, sub_path)
+                        except Exception as re_sub:
+                            print(f"Error rendering AI subbed variation {dur_name}: {re_sub}")
+                            sub_path = ""
+                    else:
+                        sub_path = ""
                     
                     # Insert into ai_montages table
                     conn = get_db_connection()
@@ -436,6 +451,10 @@ def bg_run_manual_render(project_id: int, filename: str, video_path: str, segmen
         montages_rows = cursor.fetchall()
         conn.close()
         
+        transition_style, transition_duration = processor.get_transition_settings()
+        animation, fade_ms = processor.get_subtitle_animation_settings()
+        manual_total_dur = processor.get_video_duration(video_path)
+
         for m_name, m_order_json, m_filepath_sub, m_filepath_raw in montages_rows:
             m_order = json.loads(m_order_json)
             try:
@@ -443,39 +462,56 @@ def bg_run_manual_render(project_id: int, filename: str, video_path: str, segmen
             except Exception:
                 m_dur = None
                 
-            if m_filepath_sub:
+            # Render the raw concat once (word-snapped), reusing one decode.
+            raw_target = m_filepath_raw or ((m_filepath_sub + ".rawtmp.mp4") if m_filepath_sub else None)
+            plan = None
+            if raw_target:
                 try:
-                    render_engine.render_custom_reordered_cut(
+                    _, plan = render_engine.render_custom_reordered_cut(
                         video_path,
                         segments_map,
                         m_order,
                         segments,
                         resolved_preset,
-                        m_filepath_sub,
+                        raw_target,
                         font_family=font_family,
                         zoom_effect=zoom_effect,
                         bg_music_path=bg_music_path,
-                        target_duration=m_dur
-                    )
-                except Exception as ex_sub:
-                    print(f"Error re-rendering AI variation subbed: {ex_sub}")
-                    
-            if m_filepath_raw:
-                try:
-                    render_engine.render_custom_reordered_cut(
-                        video_path,
-                        segments_map,
-                        m_order,
-                        None,
-                        resolved_preset,
-                        m_filepath_raw,
-                        font_family=font_family,
-                        zoom_effect=zoom_effect,
-                        bg_music_path=bg_music_path,
-                        target_duration=m_dur
+                        target_duration=m_dur,
+                        total_dur=manual_total_dur,
+                        transition=transition_style,
+                        transition_duration=transition_duration,
+                        animation=animation,
+                        fade_ms=fade_ms,
+                        burn=False,
+                        return_slices=True
                     )
                 except Exception as ex_raw:
                     print(f"Error re-rendering AI variation raw: {ex_raw}")
+                    
+            if m_filepath_sub and plan is not None and raw_target and os.path.exists(raw_target):
+                try:
+                    shifted = render_engine.shift_subtitles_for_slices(
+                        segments, plan["slices"], plan["use_xfade"], plan["trans_d"]
+                    )
+                    if shifted:
+                        sub_ass = m_filepath_sub + ".ass"
+                        render_engine.generate_ass_file(
+                            shifted, resolved_preset, sub_ass,
+                            font_family=font_family, animation=animation, fade_ms=fade_ms
+                        )
+                        render_engine.render_subtitles(raw_target, sub_ass, m_filepath_sub)
+                    else:
+                        shutil.copy2(raw_target, m_filepath_sub)
+                except Exception as ex_sub:
+                    print(f"Error re-rendering AI variation subbed: {ex_sub}")
+
+            # Remove the temp raw if it wasn't itself an output target.
+            if not m_filepath_raw and raw_target and os.path.exists(raw_target):
+                try:
+                    os.remove(raw_target)
+                except Exception:
+                    pass
         
         # Set to completed
         conn = get_db_connection()

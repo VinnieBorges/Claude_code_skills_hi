@@ -750,7 +750,7 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         return output_path, {"slices": slices, "use_xfade": use_xfade, "trans_d": trans_d}
     return output_path
 
-def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None, animation="none", fade_ms=0):
+def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None, animation="none", fade_ms=0, return_slices=False, burn=True):
     """
     Slices segments, concatenates them in custom order, shifts subtitles (including word timestamps), and burns them.
 
@@ -887,7 +887,10 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
         # Fallback to direct copy
         ass_path = output_path + ".ass"
         generate_ass_file(subtitle_segments, style_preset, ass_path, font_family=font_family, animation=animation, fade_ms=fade_ms)
-        return render_subtitles(video_path, ass_path, output_path)
+        render_subtitles(video_path, ass_path, output_path)
+        if return_slices:
+            return output_path, {"slices": [], "use_xfade": False, "trans_d": 0.0}
+        return output_path
 
     # Decide the transition plan from the final clip durations. This single
     # decision drives BOTH the subtitle timeline and the filter graph so they
@@ -978,8 +981,10 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
 
     run_command(args, desc="Reorder concat")  # raises with stderr on failure
 
-    # Generate shifted subtitles ASS file
-    if subtitle_segments:
+    # Generate shifted subtitles ASS file. `burn=False` lets callers reuse this
+    # to produce just the (word-snapped) raw concat + slice plan, then burn the
+    # subtitled version separately onto the short clip without re-concatenating.
+    if subtitle_segments and burn:
         ass_path = output_path + ".ass"
         generate_ass_file(shifted_subtitles, style_preset, ass_path, font_family=font_family, animation=animation, fade_ms=fade_ms)
 
@@ -1003,4 +1008,6 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
                 pass
         shutil.move(temp_video, output_path)
 
+    if return_slices:
+        return output_path, {"slices": slices, "use_xfade": use_xfade, "trans_d": trans_d}
     return output_path
