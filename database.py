@@ -176,7 +176,19 @@ def init_db():
     conn.close()
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    """
+    Opens a SQLite connection configured for safe concurrent access.
+
+    The watch-folder thread, the queue-worker thread and FastAPI BackgroundTasks
+    all write to the same DB. WAL lets readers and a writer coexist, and the busy
+    timeout makes writers wait for a lock instead of immediately raising
+    "database is locked".
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
 
 def get_system_prompt(component):
     """Retrieves the system prompt for a specific component."""

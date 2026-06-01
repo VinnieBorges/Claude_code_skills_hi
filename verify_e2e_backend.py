@@ -5,13 +5,43 @@ import os
 API_BASE = "http://localhost:8000"
 VIDEO_PATH = "raw/test_video.mp4"
 
+# How long to wait for the automated queue pipeline (analysis + all renders).
+POLL_TIMEOUT = 600  # seconds
+POLL_INTERVAL = 4    # seconds
+
+
+def _poll_until(project_id, target_status):
+    """Polls a project until it reaches target_status or 'failed' / timeout."""
+    start = time.time()
+    while time.time() - start < POLL_TIMEOUT:
+        res = requests.get(f"{API_BASE}/api/projects/{project_id}")
+        if res.status_code != 200:
+            print(f"  [WARN] status query returned {res.status_code}")
+            time.sleep(POLL_INTERVAL)
+            continue
+        details = res.json()
+        status = details["status"]
+        print(f"  Status: {status} ({int(time.time() - start)}s)")
+        if status == target_status:
+            return details
+        if status == "failed":
+            print("  [ERROR] Project entered 'failed' state.")
+            return None
+        time.sleep(POLL_INTERVAL)
+    print("  [ERROR] Timed out waiting for status.")
+    return None
+
+
 def run_verification():
     print("--- ViniCut-AI E2E Verification Script ---")
     if not os.path.exists(VIDEO_PATH):
         print(f"Error: test video {VIDEO_PATH} not found.")
         return
-        
-    # 1. Upload Video
+
+    # 1. Upload Video. NOTE: the backend auto-enqueues the project; the queue
+    #    worker runs Whisper + AI segmentation + all renders with no separate
+    #    /analyze call. (The old version of this script POSTed to a non-existent
+    #    /analyze endpoint and waited for a 'reviewed' status the API never sets.)
     print("Step 1: Uploading video...")
     with open(VIDEO_PATH, "rb") as f:
         res = requests.post(f"{API_BASE}/api/upload", files={"file": f})
@@ -22,97 +52,72 @@ def run_verification():
     project_id = upload_data["project_id"]
     filename = upload_data["filename"]
     print(f"Uploaded successfully. Project ID: {project_id}, Filename: {filename}")
-    
-    # 2. Trigger Analysis
-    print("Step 2: Triggering analysis...")
-    res = requests.post(f"{API_BASE}/api/projects/{project_id}/analyze")
-    if res.status_code != 200:
-        print(f"Failed to analyze: {res.text}")
+
+    # 2. Wait for the automated pipeline to finish (analysis + standard cuts +
+    #    AI montage variations all happen in the background queue worker).
+    print("Step 2: Waiting for automated analysis + render to complete...")
+    details = _poll_until(project_id, "completed")
+    if details is None:
         return
-    print("Analysis started successfully. Polling status...")
-    
-    # 3. Poll for 'reviewed' status
-    while True:
-        res = requests.get(f"{API_BASE}/api/projects/{project_id}")
-        details = res.json()
-        status = details["status"]
-        print(f"Current Status: {status}")
-        if status == "reviewed":
-            break
-        elif status == "failed":
-            print("Analysis failed.")
-            return
-        time.sleep(3)
-        
-    print("Analysis complete! Project Details:")
-    print(f"Segments map: {details['segments_map']}")
-    print(f"Subtitle word count: {len(details['transcript'])}")
-    
-    # 4. Fetch AI Montage Recommendation
-    print("Step 4: Requesting AI Montage suggestions...")
+
+    print("Analysis + render complete! Project Details:")
+    seg_map = details.get("segments_map")
+    print(f"  Segments map: {seg_map}")
+    transcript = details.get("transcript") or []
+    print(f"  Subtitle segment count: {len(transcript)}")
+    print(f"  Standard cuts in DB: {list((details.get('cuts') or {}).keys())}")
+    print(f"  AI montages: {[m['name'] for m in details.get('ai_montages', [])]}")
+
+    # 3. Fetch an AI montage recommendation (optional, best-effort).
+    print("Step 3: Requesting AI montage suggestion...")
     res = requests.post(f"{API_BASE}/api/projects/{project_id}/montage")
     if res.status_code == 200:
         montage = res.json()
-        print(f"Recommended order: {montage['recommended_order']}")
-        print(f"Reasoning: {montage['reasoning']}")
+        print(f"  Recommended order: {montage.get('recommended_order')}")
+        print(f"  Reasoning: {montage.get('reasoning')}")
+        order = montage.get("recommended_order", ["Hook", "Demo", "CTA"])
     else:
-        print(f"Failed to fetch montage suggestion: {res.text}")
-        montage = {"recommended_order": ["CTA", "Hook", "Demo"]}
-        
-    # 5. Trigger Render (with custom edits)
-    print("Step 5: Triggering cuts rendering (subbed and raw)...")
-    # Simulate a subtitle edit
-    transcript = details["transcript"]
+        print(f"  Montage suggestion unavailable: {res.text}")
+        order = ["Hook", "Demo", "CTA"]
+
+    # 4. Trigger a manual re-render with an edited transcript (exercises the
+    #    correction-logging + custom-order render path).
+    print("Step 4: Triggering manual re-render with an edited subtitle...")
     if transcript:
         transcript[0]["text"] = "Welcome to ViniCut AI editor!"
-        
+
     render_payload = {
         "transcript": transcript,
         "style_preset": "Bold Yellow",
-        "order": montage["recommended_order"]
+        "order": order,
     }
-    
     res = requests.post(f"{API_BASE}/api/projects/{project_id}/render", json=render_payload)
     if res.status_code != 200:
         print(f"Failed to trigger render: {res.text}")
         return
-    print("Render triggered. Polling status...")
-    
-    # 6. Poll for 'completed' status
-    while True:
-        res = requests.get(f"{API_BASE}/api/projects/{project_id}")
-        details = res.json()
-        status = details["status"]
-        print(f"Current Status: {status}")
-        if status == "completed":
-            break
-        elif status == "failed":
-            print("Rendering failed.")
-            return
-        time.sleep(3)
-        
-    print("Rendering completed successfully!")
-    print(f"Cuts available in DB: {details['cuts']}")
-    
-    # 7. Verify downloads
-    print("Step 7: Verifying dual downloads (subbed and raw)...")
+    print("  Re-render triggered. Waiting for completion...")
+    if _poll_until(project_id, "completed") is None:
+        return
+    print("Re-render completed successfully!")
+
+    # 5. Verify dual downloads (subtitled + raw) for a couple of cut types.
+    print("Step 5: Verifying dual downloads (subbed and raw)...")
     cuts_to_verify = ["5s", "custom"]
     for cut in cuts_to_verify:
-        # Check subbed download
         res_sub = requests.get(f"{API_BASE}/api/projects/{project_id}/download/{cut}/true")
         if res_sub.status_code == 200:
-            print(f"  [SUCCESS] Downloaded subtitled {cut} cut (size: {len(res_sub.content)} bytes)")
+            print(f"  [SUCCESS] subtitled {cut} cut ({len(res_sub.content)} bytes)")
         else:
-            print(f"  [FAILED] Downloaded subtitled {cut} cut: {res_sub.status_code}")
-            
-        # Check raw download
+            print(f"  [FAILED] subtitled {cut} cut: {res_sub.status_code}")
+
         res_raw = requests.get(f"{API_BASE}/api/projects/{project_id}/download/{cut}/false")
         if res_raw.status_code == 200:
-            print(f"  [SUCCESS] Downloaded raw {cut} cut (size: {len(res_raw.content)} bytes)")
+            print(f"  [SUCCESS] raw {cut} cut ({len(res_raw.content)} bytes)")
         else:
-            print(f"  [FAILED] Downloaded raw {cut} cut: {res_raw.status_code}")
-            
-    print("\n--- E2E VERIFICATION COMPLETED SUCCESSFULLY ---")
+            print(f"  [FAILED] raw {cut} cut: {res_raw.status_code}")
+
+    print("\n--- E2E VERIFICATION COMPLETED ---")
+
 
 if __name__ == "__main__":
     run_verification()

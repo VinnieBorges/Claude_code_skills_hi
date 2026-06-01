@@ -243,7 +243,32 @@ with col_left:
         
         st.subheader("⚙️ AI Model Engines")
         vision_model = st.text_input("Vision Model (Ollama)", value="llama3.2-vision:latest")
-        
+
+        st.subheader("🎞️ Boundary Transitions")
+        _trans_options = ["none", "fade", "dissolve", "fade_black", "fade_white",
+                          "zoom_blur", "slideleft", "wipeleft", "circleopen", "radial", "pixelize"]
+        _cur_trans = database.get_setting("transition_style", "fade")
+        if _cur_trans not in _trans_options:
+            _trans_options.insert(0, _cur_trans)
+        transition_style = st.selectbox(
+            "Transition between Hook / Demo / CTA",
+            _trans_options,
+            index=_trans_options.index(_cur_trans),
+            help="Cross-fade applied where segments join in the cuts. 'none' = hard cut."
+        )
+        try:
+            _cur_dur = float(database.get_setting("transition_duration", "0.4"))
+        except (TypeError, ValueError):
+            _cur_dur = 0.4
+        transition_duration = st.slider(
+            "Transition duration (seconds)",
+            min_value=0.1, max_value=1.0, value=min(max(_cur_dur, 0.1), 1.0), step=0.05,
+            disabled=(transition_style == "none")
+        )
+        # Persist so render_final_cuts (via get_transition_settings) picks these up.
+        database.update_setting("transition_style", transition_style)
+        database.update_setting("transition_duration", str(transition_duration))
+
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state.status == "idle":
             if st.button("🚀 Run AI Slicing & Transcription"):

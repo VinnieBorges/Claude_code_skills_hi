@@ -49,7 +49,29 @@ class RenderRequest(BaseModel):
     zoom_effect: Optional[int] = 1
 
 def get_db_connection():
-    return sqlite3.connect(database.DB_PATH)
+    # Delegate to the shared helper so WAL + busy_timeout apply everywhere and
+    # concurrent workers don't hit "database is locked".
+    return database.get_db_connection()
+
+
+def safe_media_filename(filename, allowed_exts=None):
+    """
+    Reduces an uploaded filename to a safe basename and (optionally) validates
+    its extension, preventing path traversal (e.g. '..\\..\\evil') from escaping
+    the intended upload directory.
+    """
+    base = os.path.basename(filename or "")
+    base = base.replace("\\", "").replace("/", "").strip()
+    if not base or base in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if allowed_exts is not None:
+        ext = os.path.splitext(base)[1].lower()
+        if ext not in allowed_exts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed_exts))}."
+            )
+    return base
 
 # Sequential Background Queue Processor
 def sequential_queue_worker():
@@ -167,7 +189,8 @@ def sequential_queue_worker():
                             transcription,
                             resolved_preset,
                             sub_path,
-                            target_duration=dur
+                            target_duration=dur,
+                            total_dur=total_dur
                         )
                     except Exception as re_sub:
                         print(f"Error rendering AI subbed variation {dur_name}: {re_sub}")
@@ -182,7 +205,8 @@ def sequential_queue_worker():
                             None,
                             resolved_preset,
                             raw_path,
-                            target_duration=dur
+                            target_duration=dur,
+                            total_dur=total_dur
                         )
                     except Exception as re_raw:
                         print(f"Error rendering AI raw variation {dur_name}: {re_raw}")
@@ -476,7 +500,7 @@ def bg_run_manual_render(project_id: int, filename: str, video_path: str, segmen
 
 @app.post("/api/upload")
 async def upload_video(file: UploadFile = File(...)):
-    filename = file.filename
+    filename = safe_media_filename(file.filename, {".mp4", ".mov", ".avi", ".mkv"})
     raw_path = os.path.join(database.RAW_DIR, filename)
     
     with open(raw_path, "wb") as buffer:
@@ -502,9 +526,9 @@ async def upload_bulk(files: List[UploadFile] = File(...)):
     cursor = conn.cursor()
     
     for file in files:
-        filename = file.filename
+        filename = safe_media_filename(file.filename, {".mp4", ".mov", ".avi", ".mkv"})
         raw_path = os.path.join(database.RAW_DIR, filename)
-        
+
         with open(raw_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
@@ -892,11 +916,7 @@ import font_parser
 
 @app.post("/api/fonts")
 def upload_custom_font(file: UploadFile = File(...)):
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in [".ttf", ".otf"]:
-        raise HTTPException(status_code=400, detail="Only TrueType (.ttf) and OpenType (.otf) fonts are supported.")
-        
+    filename = safe_media_filename(file.filename, {".ttf", ".otf"})
     font_path = os.path.join(FONTS_DIR, filename)
     with open(font_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -995,6 +1015,8 @@ def get_system_settings():
         "edit_model": database.get_setting("edit_model", "gemma4:26b"),
         "whisper_model": database.get_setting("whisper_model", "large-v3"),
         "whisper_prompt": whisper_prompt,
+        "transition_style": database.get_setting("transition_style", "fade"),
+        "transition_duration": database.get_setting("transition_duration", "0.4"),
         "agent_notes": agent_notes
     }
 
@@ -1006,6 +1028,7 @@ def update_system_settings(req: SettingsUpdateRequest):
 
 @app.post("/api/projects/{project_id}/bg-music")
 def upload_bg_music(project_id: int, file: UploadFile = File(...)):
+    filename = safe_media_filename(file.filename, {".mp3", ".wav", ".m4a", ".ogg"})
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT filename FROM projects WHERE id = ?", (project_id,))
@@ -1013,13 +1036,7 @@ def upload_bg_music(project_id: int, file: UploadFile = File(...)):
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Project not found")
-        
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in [".mp3", ".wav", ".m4a", ".ogg"]:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Only standard audio files (.mp3, .wav, .m4a, .ogg) are supported.")
-        
+
     bg_music_dir = os.path.join(database.RAW_DIR, f"project_{project_id}_music")
     os.makedirs(bg_music_dir, exist_ok=True)
     music_path = os.path.join(bg_music_dir, filename)

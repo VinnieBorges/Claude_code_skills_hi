@@ -420,7 +420,7 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
         # 1. Subtitled Cut
         cut_filename = f"project_{project_id}_cut_{dur}s.mp4"
         cut_path = os.path.join(CUTS_DIR, cut_filename)
-        make_semantic_cut(burned_video_path, seg_dict, dur, cut_path, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration)
+        make_semantic_cut(burned_video_path, seg_dict, dur, cut_path, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration, total_dur=total_dur)
         cut_paths[dur] = cut_path
 
         cursor.execute("""
@@ -431,7 +431,7 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
         # 2. Raw Cut (No subtitles)
         cut_filename_raw = f"project_{project_id}_cut_{dur}s_raw.mp4"
         cut_path_raw = os.path.join(CUTS_DIR, cut_filename_raw)
-        make_semantic_cut(original_video_path, seg_dict, dur, cut_path_raw, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration)
+        make_semantic_cut(original_video_path, seg_dict, dur, cut_path_raw, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration, total_dur=total_dur)
         cut_paths[f"{dur}s_raw"] = cut_path_raw
 
         cursor.execute("""
