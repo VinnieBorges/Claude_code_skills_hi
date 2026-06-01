@@ -3,100 +3,124 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ViniCut-AI // Studio</title>
+<title>ViniCut — Studio</title>
 <style>
   :root{
-    --bg:#0e0e14; --panel:#171722; --panel2:#1a1a26; --line:#2a2a3e;
-    --txt:#d8d8e2; --muted:#8f90a6; --accent:#00e5ff; --accent2:#6c5ce7;
-    --ok:#22c98e; --warn:#f5a623; --err:#ff5470; --chip:#222234;
+    --bg:#141416; --panel:#1c1c20; --panel2:#232329; --line:#2e2e34; --line2:#3a3a42;
+    --txt:#e4e4e7; --muted:#8a8a93; --muted2:#a0a0a8;
+    --accent:#f5a623; --accent-hi:#ffb733; --ink:#141416;
+    --ok:#3ecf8e; --err:#ff5470;
+    --mono:'Consolas','SF Mono','Roboto Mono',ui-monospace,monospace;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',Inter,system-ui,sans-serif;font-size:14px}
+  body{background:var(--bg);color:var(--txt);font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
   a{color:var(--accent);text-decoration:none}
   button{font-family:inherit;cursor:pointer}
-  .btn{background:linear-gradient(135deg,#00b4db,#0083b0);color:#fff;border:1px solid #00c6e0;border-radius:7px;padding:9px 16px;font-weight:600;transition:.15s;box-shadow:0 2px 10px rgba(0,229,255,.15)}
-  .btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,229,255,.35)}
-  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
-  .btn.alt{background:linear-gradient(135deg,#a29bfe,#6c5ce7);border-color:#a29bfe}
-  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);box-shadow:none}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* buttons */
+  .btn{background:var(--accent);color:var(--ink);border:1px solid var(--accent);border-radius:5px;padding:8px 14px;font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+  .btn:hover{background:var(--accent-hi);border-color:var(--accent-hi)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn svg{width:14px;height:14px}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line2)}
   .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
-  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
-  .topbar{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(14,14,20,.92);backdrop-filter:blur(8px);z-index:30}
-  .logo{font-weight:800;font-size:18px;color:var(--accent);letter-spacing:.5px}
-  .logo small{display:block;font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+  .btn.sm{padding:5px 10px;font-size:11.5px}
+  /* topbar */
+  .topbar{display:flex;align-items:center;gap:14px;height:50px;padding:0 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#161618;z-index:30}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;letter-spacing:.2px}
+  .brand .mark{width:16px;height:16px;background:var(--accent);transform:rotate(45deg);border-radius:3px}
+  .brand small{color:var(--muted);font-weight:600;font-size:9.5px;letter-spacing:2px;text-transform:uppercase;margin-left:2px}
   .spacer{flex:1}
-  .wrap{max-width:1180px;margin:0 auto;padding:22px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 4px 22px rgba(0,0,0,.25)}
-  h2{margin:0 0 12px;font-size:15px;color:var(--accent);font-weight:700}
-  h3{margin:0 0 8px;font-size:13px;color:#c7c8d8}
+  /* layout */
+  .wrap{max-width:1200px;margin:0 auto;padding:18px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px}
+  .ph2{font-size:10.5px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1.2px;margin:0 0 12px;padding-left:9px;border-left:2px solid var(--accent);line-height:1}
+  .ph3{font-size:10.5px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin:0 0 9px}
   .muted{color:var(--muted)}
-  label.fld{display:block;margin:10px 0 4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-  select,input[type=text],input[type=number],textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:8px 10px;font-family:inherit;font-size:13px}
+  .tag{font-size:11px;color:var(--muted)}
+  label.fld{display:block;margin:11px 0 4px;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+  select,input[type=text],input[type=number],textarea{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:5px;padding:8px 10px;font-family:inherit;font-size:13px}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent)}
   textarea{resize:vertical}
+  input[type=number]{font-family:var(--mono)}
   .row{display:flex;gap:12px;flex-wrap:wrap}
   .row>*{flex:1;min-width:0}
   /* dropzone */
-  .drop{border:2px dashed var(--line);border-radius:12px;padding:34px;text-align:center;transition:.15s;cursor:pointer;color:var(--muted)}
-  .drop.hover{border-color:var(--accent);background:rgba(0,229,255,.05);color:var(--accent)}
-  .drop b{color:var(--txt)}
-  /* project grid */
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;transition:.15s;position:relative}
-  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
-  .card .fn{font-weight:600;word-break:break-word;margin-right:22px}
-  .card .meta{font-size:11px;color:var(--muted);margin-top:6px}
-  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-  .pill.pending,.pill.queued{background:#33343f;color:#c9cad8}
-  .pill.analyzing,.pill.rendering{background:rgba(245,166,35,.18);color:var(--warn)}
-  .pill.completed,.pill.reviewed{background:rgba(34,201,142,.18);color:var(--ok)}
-  .pill.failed{background:rgba(255,84,112,.18);color:var(--err)}
-  .card .cb{position:absolute;top:12px;right:12px;width:16px;height:16px;cursor:pointer}
+  .drop{border:1.5px dashed var(--line2);border-radius:6px;padding:30px;text-align:center;transition:.12s;cursor:pointer;color:var(--muted)}
+  .drop:hover,.drop.hover{border-color:var(--accent);background:rgba(245,166,35,.04);color:var(--txt)}
+  .drop svg{width:26px;height:26px;color:var(--muted);margin-bottom:8px}
+  .drop:hover svg,.drop.hover svg{color:var(--accent)}
+  .drop b{color:var(--txt);font-weight:600}
+  /* projects */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:12px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:13px;cursor:pointer;transition:.12s;position:relative}
+  .card:hover{border-color:var(--line2);background:#26262c}
+  .card .fn{font-weight:600;word-break:break-word;margin-right:20px;font-size:13px}
+  .card .meta{font-size:11px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+  .card .cb{position:absolute;top:12px;right:12px;width:15px;height:15px;cursor:pointer;accent-color:var(--accent)}
+  /* status pill = dot + label */
+  .pill{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;display:inline-flex;align-items:center;gap:6px}
+  .pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+  .pill.pending,.pill.queued{color:var(--muted2)}
+  .pill.analyzing,.pill.rendering{color:var(--accent)}
+  .pill.completed,.pill.reviewed{color:var(--ok)}
+  .pill.failed{color:var(--err)}
   /* timeline */
-  .tl{position:relative;height:46px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;cursor:pointer;user-select:none}
-  .tl .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;text-shadow:1px 1px 2px rgba(0,0,0,.5);overflow:hidden;white-space:nowrap}
-  .tl .seg.hook{background:linear-gradient(90deg,#00b4db,#0083b0)}
-  .tl .seg.demo{background:linear-gradient(90deg,#6c5ce7,#a29bfe)}
-  .tl .seg.cta{background:linear-gradient(90deg,#ff007f,#ff4d9d)}
-  .tl .ph{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 8px #fff;left:0;pointer-events:none}
-  video{width:100%;border-radius:8px;background:#000;display:block}
+  .tl{position:relative;height:44px;border-radius:5px;overflow:hidden;border:1px solid var(--line2);display:flex;cursor:pointer;user-select:none;margin-top:12px}
+  .tl .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:11px;letter-spacing:.5px;overflow:hidden;white-space:nowrap;opacity:.92}
+  .tl .seg.hook{background:#2d6a73}
+  .tl .seg.demo{background:#3f4a6b}
+  .tl .seg.cta{background:#6e4555}
+  .tl .ph{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);left:0;pointer-events:none;box-shadow:0 0 4px rgba(245,166,35,.7)}
+  .tl .ph::before{content:'';position:absolute;top:-1px;left:-4px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--accent)}
+  video{width:100%;border-radius:5px;background:#000;display:block;border:1px solid var(--line)}
   .order-list{display:flex;flex-direction:column;gap:6px}
-  .order-item{display:flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+  .order-item{display:flex;align-items:center;gap:9px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:7px 10px}
+  .order-item .idx{font-family:var(--mono);color:var(--accent);font-size:11px;width:14px}
   .order-item .nm{flex:1;font-weight:600}
-  .seg-edit{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--panel2)}
-  .seg-edit .tt{display:flex;gap:8px;margin-bottom:6px}
+  .seg-edit{border:1px solid var(--line);border-radius:5px;padding:9px;margin-bottom:7px;background:var(--panel2)}
+  .seg-edit .tt{display:flex;gap:7px;margin-bottom:6px}
   .seg-edit .tt input{flex:1}
-  .out{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2);margin-bottom:12px}
+  .out{border:1px solid var(--line);border-radius:6px;padding:11px;background:var(--panel2);margin-bottom:11px}
   .out .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-  .out .hd .nm{font-weight:700;flex:1}
-  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
-  .toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
-  .toast{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);padding:11px 15px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:340px;animation:slide .2s}
-  .toast.err{border-left-color:var(--err)} .toast.ok{border-left-color:var(--ok)}
-  @keyframes slide{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
-  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px}
-  .spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:middle}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .hide{display:none!important}
-  .two{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+  .out .hd .nm{font-weight:600;flex:1;font-size:13px}
+  .btnrow{display:flex;gap:7px;flex-wrap:wrap}
+  .two{display:grid;grid-template-columns:1.05fr .95fr;gap:16px}
   @media(max-width:880px){.two{grid-template-columns:1fr}}
-  .tag{font-size:11px;color:var(--muted)}
-  .empty{text-align:center;color:var(--muted);padding:30px}
+  .empty{text-align:center;color:var(--muted);padding:28px}
+  /* toast / modal / spinner */
+  .toast-wrap{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:60}
+  .toast{background:var(--panel);border:1px solid var(--line2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:5px;box-shadow:0 8px 28px rgba(0,0,0,.5);max-width:340px;font-size:12.5px;animation:sl .18s}
+  .toast.err{border-left-color:var(--err)} .toast.ok{border-left-color:var(--ok)}
+  @keyframes sl{from{transform:translateX(16px);opacity:0}to{transform:none;opacity:1}}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal{background:var(--panel);border:1px solid var(--line2);border-radius:8px;max-width:540px;width:100%;max-height:88vh;overflow:auto;padding:20px}
+  .spinner{width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
   <div class="topbar">
-    <div class="logo">🎬 ViniCut-AI <small>Studio</small></div>
+    <div class="brand"><span class="mark"></span>ViniCut<small>Studio</small></div>
     <div class="spacer"></div>
-    <button class="btn ghost sm" id="backBtn" onclick="goHome()" style="display:none">← Projects</button>
-    <button class="btn ghost sm" onclick="openSettings()">⚙ Settings</button>
+    <button class="btn ghost sm" id="backBtn" onclick="goHome()" style="display:none">‹ Projects</button>
+    <button class="btn ghost sm" onclick="openSettings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="15" cy="8" r="2.6" fill="#1c1c20"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="16" r="2.6" fill="#1c1c20"/></svg>
+      Settings</button>
   </div>
   <div class="wrap" id="view"></div>
   <div class="toast-wrap" id="toasts"></div>
 
 <script>
 "use strict";
+/* ---------------- icons ---------------- */
+const IC = {
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9z"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
+};
 /* ---------------- API ---------------- */
 const API = {
   async req(url, opts){
@@ -135,15 +159,15 @@ async function renderHome(){
   selected = new Set();
   view.innerHTML = `
     <div class="panel">
-      <h2>📥 Import UGC Footage</h2>
-      <div class="drop" id="drop"><b>Drag &amp; drop</b> video(s) here, or click to browse<div class="tag" style="margin-top:6px">mp4 · mov · avi · mkv — bulk supported</div></div>
+      <div class="ph2">Import footage</div>
+      <div class="drop" id="drop">${IC.up}<div><b>Drag &amp; drop</b> video(s) here, or click to browse</div><div class="tag" style="margin-top:5px">mp4 · mov · avi · mkv — bulk supported</div></div>
       <input type="file" id="file" accept=".mp4,.mov,.avi,.mkv" multiple style="display:none" />
     </div>
     <div class="panel">
-      <div style="display:flex;align-items:center"><h2 style="flex:1">🎞️ Projects</h2>
-        <button class="btn alt sm" id="zipBtn" disabled onclick="bulkZip()">⬇ Download ZIP (0)</button>
+      <div style="display:flex;align-items:center"><div class="ph2" style="flex:1;margin:0">Projects</div>
+        <button class="btn ghost sm" id="zipBtn" disabled onclick="bulkZip()">${IC.dl} ZIP (0)</button>
       </div>
-      <div id="projects"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+      <div id="projects" style="margin-top:14px"><div class="empty"><span class="spinner"></span> Loading…</div></div>
     </div>`;
   const drop=$('#drop'), file=$('#file');
   drop.onclick=()=>file.click();
@@ -174,10 +198,10 @@ async function loadProjects(){
       <input type="checkbox" class="cb" onclick="event.stopPropagation();toggleSel(${p.id},this.checked)" ${selected.has(p.id)?'checked':''}/>
       <div class="fn">${esc(p.filename)}</div>
       <div class="meta">#${p.id} · ${esc((p.created_at||'').replace('T',' ').split('.')[0])}</div>
-      <div style="margin-top:8px"><span class="pill ${esc(p.status)}">${esc(p.status)}</span></div>
+      <div style="margin-top:9px"><span class="pill ${esc(p.status)}">${esc(p.status)}</span></div>
     </div>`).join('')}</div>`;
 }
-function toggleSel(id,on){ on?selected.add(id):selected.delete(id); const b=$('#zipBtn'); if(b){ b.disabled=selected.size===0; b.textContent=`⬇ Download ZIP (${selected.size})`; } }
+function toggleSel(id,on){ on?selected.add(id):selected.delete(id); const b=$('#zipBtn'); if(b){ b.disabled=selected.size===0; b.innerHTML=`${IC.dl} ZIP (${selected.size})`; } }
 async function bulkZip(){
   if(!selected.size) return;
   try{
@@ -188,7 +212,7 @@ async function bulkZip(){
 }
 
 /* ---------------- DETAIL ---------------- */
-let cur=null;            // current project object
+let cur=null;
 let curOrder=["Hook","Demo","CTA"];
 async function openProject(id){
   stopPoll(); location.hash='p'+id;
@@ -202,9 +226,9 @@ async function refreshDetail(id, full){
   const prevStatus = cur && cur.status;
   cur=p;
   if(full || !$('#detail')) drawDetail(p);
-  else { // light updates while processing
+  else {
     const sp=$('#statusPill'); if(sp){ sp.className='pill '+p.status; sp.textContent=p.status; }
-    if(prevStatus && prevStatus!=='completed' && p.status==='completed'){ drawDetail(p); toast('Render complete ✓','ok'); }
+    if(prevStatus && prevStatus!=='completed' && p.status==='completed'){ drawDetail(p); toast('Render complete','ok'); }
   }
 }
 function drawDetail(p){
@@ -214,25 +238,25 @@ function drawDetail(p){
   view.innerHTML = `
   <div id="detail">
     <div class="panel">
-      <div style="display:flex;align-items:center;gap:10px">
-        <h2 style="flex:1;margin:0">${esc(p.filename)}</h2>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;font-weight:700;font-size:15px;word-break:break-word">${esc(p.filename)}</div>
         <span class="pill ${p.status}" id="statusPill">${esc(p.status)}</span>
-        <button class="btn alt sm" onclick="dl('/api/projects/${p.id}/download-zip')">⬇ All cuts (ZIP)</button>
+        <button class="btn sm" onclick="dl('/api/projects/${p.id}/download-zip')">${IC.dl} All cuts</button>
       </div>
     </div>
     <div class="two">
       <div>
         <div class="panel">
-          <h3>📺 Source preview</h3>
+          <div class="ph3">Source</div>
           <video id="player" src="/raw/${encodeURIComponent(p.filename)}" controls preload="metadata"></video>
           <div class="tl" id="tl" title="Click to seek">${tlBands(sm)}<div class="ph" id="ph"></div></div>
-          <div class="tag" id="tlabel" style="margin-top:6px">0:00 / 0:00</div>
+          <div class="tag mono" id="tlabel" style="margin-top:6px">0:00 / 0:00</div>
         </div>
         <div class="panel" id="outputs">${processing?progressHtml(p):outputsHtml(p)}</div>
       </div>
       <div>
         <div class="panel">
-          <h3>🎬 Render settings</h3>
+          <div class="ph3">Output settings</div>
           <div class="row">
             <div><label class="fld">Style preset</label>${selectHtml('st_style',STYLES,p.style_preset)}</div>
             <div><label class="fld">Font</label><select id="st_font"><option>${esc(p.font_family||'Montserrat')}</option></select></div>
@@ -241,32 +265,30 @@ function drawDetail(p){
             <div><label class="fld">Transition</label>${selectHtml('st_trans',TRANSITIONS,'fade')}</div>
             <div><label class="fld">Caption animation</label>${selectHtml('st_anim',ANIMS,'none')}</div>
           </div>
-          <label class="fld"><input type="checkbox" id="st_zoom" ${(p.zoom_effect??1)?'checked':''} style="width:auto"/> Retention zoom on Hook/CTA</label>
+          <label class="fld" style="display:flex;align-items:center;gap:7px;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--txt)"><input type="checkbox" id="st_zoom" ${(p.zoom_effect??1)?'checked':''} style="width:auto;accent-color:var(--accent)"/> Retention zoom on Hook / CTA</label>
           <label class="fld">Clip order</label>
           <div class="order-list" id="order"></div>
           <label class="fld">AI style from a prompt</label>
-          <div class="tt" style="display:flex;gap:8px">
+          <div style="display:flex;gap:7px">
             <input type="text" id="st_prompt" placeholder="e.g. bold neon pink, big bounce"/>
-            <button class="btn ghost sm" onclick="genPreset()">✨</button>
+            <button class="btn ghost sm" onclick="genPreset()">${IC.spark}</button>
           </div>
-          <div style="margin-top:14px"><button class="btn" id="renderBtn" onclick="doRender()" ${hasAnalysis?'':'disabled'}>🔥 ${hasAnalysis?'Render / Re-render':'Waiting for analysis…'}</button></div>
+          <div style="margin-top:14px"><button class="btn" id="renderBtn" onclick="doRender()" ${hasAnalysis?'':'disabled'} style="width:100%;justify-content:center">${hasAnalysis?'Render / Re-render':'Waiting for analysis…'}</button></div>
         </div>
         <div class="panel">
-          <h3>✏️ Subtitles ${hasAnalysis?`<span class="tag">(${p.transcript.length} segments)</span>`:''}</h3>
+          <div class="ph3">Subtitles ${hasAnalysis?`<span class="tag">· ${p.transcript.length} segments</span>`:''}</div>
           <div id="subs">${hasAnalysis?'':'<div class="muted">Transcription appears here once analysis finishes.</div>'}</div>
         </div>
       </div>
     </div>
   </div>`;
-  // populate dynamic bits
   curOrder=["Hook","Demo","CTA"]; drawOrder();
   if(hasAnalysis) drawSubs(p.transcript);
   loadFontsInto(p.font_family);
-  // sync transition/animation selects from global settings
   API.settings().then(s=>{ const t=$('#st_trans'),a=$('#st_anim'); if(t&&s.transition_style&&TRANSITIONS.includes(s.transition_style))t.value=s.transition_style; if(a&&s.subtitle_animation&&ANIMS.includes(s.subtitle_animation))a.value=s.subtitle_animation; }).catch(()=>{});
   setupTimeline(sm);
 }
-function progressHtml(p){ return `<h3>⏳ Processing</h3><div class="muted"><span class="spinner"></span> Status: <b>${esc(p.status)}</b>. Analysis &amp; cuts are running in the queue — this view updates automatically.</div>`; }
+function progressHtml(p){ return `<div class="ph3">Processing</div><div class="muted"><span class="spinner"></span> Status: <b style="color:var(--accent)">${esc(p.status)}</b>. Analysis &amp; cuts are running in the queue — this view updates automatically.</div>`; }
 function tlBands(sm){
   const h=sm.hook||[0,0], d=sm.demo||[0,0], c=sm.cta||[0,0];
   const total = Math.max(c[1]||0, d[1]||0, h[1]||0) || 1;
@@ -283,7 +305,7 @@ function setupTimeline(sm){
 function selectHtml(id,opts,val){ return `<select id="${id}">${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`; }
 function drawOrder(){
   const box=$('#order'); if(!box) return;
-  box.innerHTML=curOrder.map((nm,i)=>`<div class="order-item"><span class="tag">${i+1}</span><span class="nm">${esc(nm)}</span>
+  box.innerHTML=curOrder.map((nm,i)=>`<div class="order-item"><span class="idx">${i+1}</span><span class="nm">${esc(nm)}</span>
     <button class="btn ghost sm" ${i===0?'disabled':''} onclick="moveOrder(${i},-1)">↑</button>
     <button class="btn ghost sm" ${i===curOrder.length-1?'disabled':''} onclick="moveOrder(${i},1)">↓</button></div>`).join('');
 }
@@ -308,28 +330,27 @@ async function loadFontsInto(current){
 async function genPreset(){
   const prompt=$('#st_prompt').value.trim(); if(!prompt){ toast('Describe a style first.','err'); return; }
   toast('Generating style with AI…');
-  try{ await API.aiPreset(cur.id, prompt); toast('Custom style saved — it will be used on next render.','ok'); }
+  try{ await API.aiPreset(cur.id, prompt); toast('Custom style saved — used on next render.','ok'); }
   catch(e){ toast('Style gen failed: '+e.message,'err'); }
 }
 async function doRender(){
   if(!cur) return;
   const btn=$('#renderBtn'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Rendering…';
   try{
-    // persist transition + caption animation (read by the render pipeline)
     await API.saveSettings({ transition_style:$('#st_trans').value, subtitle_animation:$('#st_anim').value });
     const transcript = subState.map(s=>{ const o={start:s.start,end:s.end,text:s.text}; if(s.words && s.text===s.orig) o.words=s.words; return o; });
     await API.render(cur.id, { transcript, style_preset:$('#st_style').value, order:curOrder, font_family:$('#st_font').value, zoom_effect:$('#st_zoom').checked?1:0 });
-    toast('Render started — outputs will refresh when ready.','ok');
+    toast('Render started — outputs refresh when ready.','ok');
     cur.status='rendering'; const sp=$('#statusPill'); if(sp){sp.className='pill rendering';sp.textContent='rendering';}
     $('#outputs').innerHTML=progressHtml(cur);
     stopPoll(); poll=setInterval(()=>refreshDetail(cur.id,false),3500);
   }catch(e){ toast('Render failed: '+e.message,'err'); }
-  finally{ btn.disabled=false; btn.innerHTML='🔥 Render / Re-render'; }
+  finally{ btn.disabled=false; btn.innerHTML='Render / Re-render'; }
 }
 function outputsHtml(p){
   const cuts=p.cuts||{}, ai=p.ai_montages||[];
-  const std=[['5s','5s Hook'],['15s','15s Pitch'],['30s','30s Ad'],['60s','60s Full'],['custom','Custom order']];
-  let html='<h3>🎬 Outputs</h3>';
+  const std=[['5s','5s · Hook'],['15s','15s · Pitch'],['30s','30s · Ad'],['60s','60s · Full'],['custom','Custom order']];
+  let html='<div class="ph3">Outputs</div>';
   const have = std.filter(([k])=>cuts[k]||cuts[k+'_raw']);
   if(!have.length && !ai.length){ return html+'<div class="muted">No cuts yet. Hit Render, or wait for the auto-pipeline.</div>'; }
   html+=have.map(([k,lab])=>{
@@ -338,21 +359,21 @@ function outputsHtml(p){
     return `<div class="out"><div class="hd"><span class="nm">${lab}</span></div>
       ${prev?`<video src="${prev}" controls preload="none"></video>`:''}
       <div class="btnrow" style="margin-top:8px">
-        ${sub?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download/${k}/true')">⬇ Subbed</button>`:''}
-        ${raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download/${k}/false')">⬇ Raw</button>`:''}
+        ${sub?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download/${k}/true')">${IC.dl} Subtitled</button>`:''}
+        ${raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download/${k}/false')">${IC.dl} Raw</button>`:''}
       </div></div>`;
   }).join('');
   if(ai.length){
-    html+='<h3 style="margin-top:14px">🤖 AI montages</h3>';
+    html+='<div class="ph3" style="margin-top:14px">AI montages</div>';
     html+=ai.map(m=>{
       const prev=m.filename_subbed?('/cuts/'+encodeURIComponent(m.filename_subbed)):(m.filename_raw?('/cuts/'+encodeURIComponent(m.filename_raw)):null);
       const nm=encodeURIComponent(m.name);
       return `<div class="out"><div class="hd"><span class="nm">${esc(m.name)}</span></div>
-        <div class="tag" style="margin-bottom:6px">${esc(m.description||'')} · order: ${esc((m.order||[]).join(' → '))}</div>
+        <div class="tag" style="margin-bottom:6px">${esc(m.description||'')} · ${esc((m.order||[]).join(' → '))}</div>
         ${prev?`<video src="${prev}" controls preload="none"></video>`:''}
         <div class="btnrow" style="margin-top:8px">
-          ${m.filename_subbed?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/true')">⬇ Subbed</button>`:''}
-          ${m.filename_raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/false')">⬇ Raw</button>`:''}
+          ${m.filename_subbed?`<button class="btn sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/true')">${IC.dl} Subtitled</button>`:''}
+          ${m.filename_raw?`<button class="btn ghost sm" onclick="dl('/api/projects/${p.id}/download-ai/${nm}/false')">${IC.dl} Raw</button>`:''}
         </div></div>`;
     }).join('');
   }
@@ -364,15 +385,15 @@ async function openSettings(){
   let s={}; try{ s=await API.settings(); }catch(e){}
   const m=document.createElement('div'); m.className='modal-bg'; m.onclick=e=>{if(e.target===m)m.remove();};
   m.innerHTML=`<div class="modal">
-    <div style="display:flex"><h2 style="flex:1">⚙ System settings</h2><button class="btn ghost sm" onclick="this.closest('.modal-bg').remove()">✕</button></div>
+    <div style="display:flex;align-items:center"><div class="ph2" style="flex:1;margin:0">System settings</div><button class="btn ghost sm" onclick="this.closest('.modal-bg').remove()">✕</button></div>
     <label class="fld">Vision model</label><input type="text" id="se_vision" value="${esc(s.vision_model||'')}"/>
     <label class="fld">Edit model (Gemma)</label><input type="text" id="se_edit" value="${esc(s.edit_model||'')}"/>
     <label class="fld">Whisper model</label><input type="text" id="se_whisper" value="${esc(s.whisper_model||'')}"/>
     <div class="row"><div><label class="fld">Default transition</label>${selectHtml('se_trans',TRANSITIONS,s.transition_style||'fade')}</div>
     <div><label class="fld">Default caption animation</label>${selectHtml('se_anim',ANIMS,s.subtitle_animation||'none')}</div></div>
-    <label class="fld">Whisper prompt (auto-learned — read-only here)</label><textarea id="se_prompt" rows="4" readonly style="opacity:.75">${esc(s.whisper_prompt||'')}</textarea>
+    <label class="fld">Whisper prompt (auto-learned — read-only here)</label><textarea id="se_prompt" rows="4" readonly style="opacity:.7">${esc(s.whisper_prompt||'')}</textarea>
     <label class="fld">Upload custom font (.ttf/.otf)</label><input type="file" id="se_font" accept=".ttf,.otf"/>
-    <div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="saveSettings(this)">💾 Save</button>
+    <div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="saveSettings(this)">Save</button>
     <button class="btn ghost" onclick="this.closest('.modal-bg').remove()">Cancel</button></div>
   </div>`;
   document.body.appendChild(m);
@@ -381,10 +402,8 @@ async function openSettings(){
 async function saveSettings(btn){
   const s={ vision_model:$('#se_vision').value, edit_model:$('#se_edit').value, whisper_model:$('#se_whisper').value,
             transition_style:$('#se_trans').value, subtitle_animation:$('#se_anim').value };
-  try{
-    await API.saveSettings(s);
-    toast('Settings saved.','ok'); btn.closest('.modal-bg').remove();
-  }catch(e){ toast('Save failed: '+e.message,'err'); }
+  try{ await API.saveSettings(s); toast('Settings saved.','ok'); btn.closest('.modal-bg').remove(); }
+  catch(e){ toast('Save failed: '+e.message,'err'); }
 }
 
 /* ---------------- boot ---------------- */
