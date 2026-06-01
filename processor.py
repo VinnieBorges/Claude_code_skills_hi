@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 from database import get_system_prompt, get_db_connection, log_subtitle_correction
-from render_engine import render_subtitles, make_semantic_cut, generate_ass_file, get_video_duration, render_custom_reordered_cut, get_smart_cut_point
+from render_engine import render_subtitles, make_semantic_cut, generate_ass_file, get_video_duration, render_custom_reordered_cut, get_smart_cut_point, shift_subtitles_for_slices
 import shutil
 
 import site
@@ -390,15 +390,9 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
     total_dur = get_video_duration(original_video_path)
     segments_map = sanitize_segments_map_to_word_boundaries(segments_map, segments, total_dur)
 
-    # Generate ASS file
-    ass_filename = f"project_{project_id}.ass"
-    ass_path = os.path.join(CUTS_DIR, ass_filename)
-    generate_ass_file(segments, style_preset, ass_path, font_family=font_family)
-
-    # Burn subtitles in
-    burned_filename = f"project_{project_id}_subbed.mp4"
-    burned_video_path = os.path.join(CUTS_DIR, burned_filename)
-    render_subtitles(original_video_path, ass_path, burned_video_path)
+    # NOTE: we no longer burn subtitles into the full-length source (a wasteful
+    # encode of the entire video). Each cut is produced raw first, then captions
+    # are shifted onto that short cut's timeline and burned on top of it.
 
     durations = [5, 15, 30, 60]
     cut_paths = {}
@@ -417,27 +411,46 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
     base_name = os.path.splitext(filename)[0]
 
     for dur in durations:
-        # 1. Subtitled Cut
-        cut_filename = f"project_{project_id}_cut_{dur}s.mp4"
-        cut_path = os.path.join(CUTS_DIR, cut_filename)
-        make_semantic_cut(burned_video_path, seg_dict, dur, cut_path, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration, total_dur=total_dur)
-        cut_paths[dur] = cut_path
-
-        cursor.execute("""
-            INSERT INTO cuts (project_id, cut_type, start_time, end_time, filepath)
-            VALUES (?, ?, ?, ?, ?)
-        """, (project_id, f"{dur}s", 0.0, float(dur), cut_path))
-
-        # 2. Raw Cut (No subtitles)
+        # 1. Raw cut (no subtitles). return_slices reports exactly which source
+        #    ranges + transition plan were used so captions can be placed on the
+        #    cut's own (shorter, possibly xfade-overlapped) output timeline.
         cut_filename_raw = f"project_{project_id}_cut_{dur}s_raw.mp4"
         cut_path_raw = os.path.join(CUTS_DIR, cut_filename_raw)
-        make_semantic_cut(original_video_path, seg_dict, dur, cut_path_raw, segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path, transition=transition_style, transition_duration=transition_duration, total_dur=total_dur)
+        _, slice_info = make_semantic_cut(
+            original_video_path, seg_dict, dur, cut_path_raw,
+            segments=segments, zoom_effect=zoom_effect, bg_music_path=bg_music_path,
+            transition=transition_style, transition_duration=transition_duration,
+            total_dur=total_dur, return_slices=True
+        )
         cut_paths[f"{dur}s_raw"] = cut_path_raw
-
         cursor.execute("""
             INSERT INTO cuts (project_id, cut_type, start_time, end_time, filepath)
             VALUES (?, ?, ?, ?, ?)
         """, (project_id, f"{dur}s_raw", 0.0, float(dur), cut_path_raw))
+
+        # 2. Subtitled cut: burn the shifted captions onto the SHORT raw cut
+        #    (replaces the old whole-source burn).
+        cut_filename = f"project_{project_id}_cut_{dur}s.mp4"
+        cut_path = os.path.join(CUTS_DIR, cut_filename)
+        shifted_subs = shift_subtitles_for_slices(
+            segments, slice_info["slices"], slice_info["use_xfade"], slice_info["trans_d"]
+        )
+        if shifted_subs:
+            cut_ass_path = os.path.join(CUTS_DIR, f"project_{project_id}_cut_{dur}s.ass")
+            generate_ass_file(shifted_subs, style_preset, cut_ass_path, font_family=font_family)
+            try:
+                render_subtitles(cut_path_raw, cut_ass_path, cut_path)
+            except Exception as burn_err:
+                print(f"Subtitle burn failed for {dur}s cut, using raw as fallback: {burn_err}")
+                shutil.copy2(cut_path_raw, cut_path)
+        else:
+            # No captions overlap this cut; subbed == raw.
+            shutil.copy2(cut_path_raw, cut_path)
+        cut_paths[dur] = cut_path
+        cursor.execute("""
+            INSERT INTO cuts (project_id, cut_type, start_time, end_time, filepath)
+            VALUES (?, ?, ?, ?, ?)
+        """, (project_id, f"{dur}s", 0.0, float(dur), cut_path))
 
         # Auto-copy raw cuts to watch outputs
         dest_name = f"{base_name}_{dur}s_raw.mp4"

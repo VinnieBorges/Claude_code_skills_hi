@@ -468,7 +468,55 @@ def get_smart_cut_point(start_time, target_end_time, segments, total_duration):
 
     return min(target_end_time, total_duration)
 
-def make_semantic_cut(video_path, segments_map, target_duration, output_path, segments=None, zoom_effect=1, bg_music_path=None, transition=None, transition_duration=None, total_dur=None):
+def shift_subtitles_for_slices(subtitle_segments, slices, use_xfade=False, trans_d=0.0):
+    """
+    Maps subtitles from the SOURCE timeline onto the OUTPUT timeline of a set of
+    concatenated slices, so captions can be burned onto an already-cut clip
+    instead of onto the full-length source.
+
+    `slices` is a list of (start, end, type) on the source timeline, in output
+    order. When use_xfade is True each boundary overlaps the next slice by
+    trans_d, pulling later slices earlier (matching append_xfade_chain). Word
+    timestamps are clipped to each slice and shifted too.
+    """
+    if not subtitle_segments or not slices:
+        return []
+    shifted = []
+    out_offset = 0.0
+    n = len(slices)
+    for i, (start, end, _seg_type) in enumerate(slices):
+        for seg in subtitle_segments:
+            ov_start = max(start, float(seg["start"]))
+            ov_end = min(end, float(seg["end"]))
+            if ov_end <= ov_start:
+                continue
+            new_seg = {
+                "start": out_offset + (ov_start - start),
+                "end": out_offset + (ov_end - start),
+                "text": seg["text"],
+            }
+            if "words" in seg and seg["words"]:
+                new_words = []
+                for w in seg["words"]:
+                    ws = max(ov_start, float(w["start"]))
+                    we = min(ov_end, float(w["end"]))
+                    if we > ws:
+                        new_words.append({
+                            "word": w["word"],
+                            "start": out_offset + (ws - start),
+                            "end": out_offset + (we - start),
+                        })
+                new_seg["words"] = new_words
+            shifted.append(new_seg)
+        # Advance the output cursor; an xfade overlaps the next slice by trans_d.
+        if use_xfade and i < n - 1:
+            out_offset += (end - start) - trans_d
+        else:
+            out_offset += (end - start)
+    return shifted
+
+
+def make_semantic_cut(video_path, segments_map, target_duration, output_path, segments=None, zoom_effect=1, bg_music_path=None, transition=None, transition_duration=None, total_dur=None, return_slices=False):
     """
     Cuts and merges segments from video_path according to semantic parts to match target_duration.
     segments_map = {
@@ -516,6 +564,9 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         res = run_command(args, desc=f"Direct transcode ({target_duration}s)", check=False)
         if res.returncode != 0:
             print(f"[render_engine] Direct transcode failed for {output_path}:\n{(res.stderr or '').strip()}")
+        if return_slices:
+            # Whole clip passes through unchanged (no cutting), so subtitles map 1:1.
+            return output_path, {"slices": [(0.0, total_dur, "full")], "use_xfade": False, "trans_d": 0.0}
         return output_path
 
     hook = segments_map.get("hook", (0.0, min(5.0, total_dur)))
@@ -656,6 +707,8 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
                 f"FFmpeg stderr:\n{(fb.stderr or '').strip()}"
             )
 
+    if return_slices:
+        return output_path, {"slices": slices, "use_xfade": use_xfade, "trans_d": trans_d}
     return output_path
 
 def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None):
