@@ -354,6 +354,21 @@ def get_transition_settings():
         transition_duration = 0.4
     return transition_style, transition_duration
 
+def get_subtitle_animation_settings():
+    """
+    Reads the caption entrance/exit animation config from the settings table.
+
+    Returns (animation, fade_ms). animation in {none, fade, pop, bounce}; defaults
+    to "none" to preserve the existing look until enabled via the UI.
+    """
+    import database
+    animation = database.get_setting("subtitle_animation", "none")
+    try:
+        fade_ms = int(float(database.get_setting("subtitle_fade_ms", "150")))
+    except (TypeError, ValueError):
+        fade_ms = 150
+    return animation, fade_ms
+
 def render_final_cuts(project_id, filename, original_video_path, segments, style_preset, segments_map, order=None):
     """
     Generates ASS, burns subtitles, and cuts the video into 5s, 15s, 30s, 60s cuts.
@@ -374,6 +389,8 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
 
     # Boundary transition style (cross-fade between Hook/Demo/CTA segments)
     transition_style, transition_duration = get_transition_settings()
+    # Caption entrance/exit animation (none / fade / pop / bounce)
+    animation, fade_ms = get_subtitle_animation_settings()
 
     if custom_preset_json:
         try:
@@ -437,7 +454,7 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
         )
         if shifted_subs:
             cut_ass_path = os.path.join(CUTS_DIR, f"project_{project_id}_cut_{dur}s.ass")
-            generate_ass_file(shifted_subs, style_preset, cut_ass_path, font_family=font_family)
+            generate_ass_file(shifted_subs, style_preset, cut_ass_path, font_family=font_family, animation=animation, fade_ms=fade_ms)
             try:
                 render_subtitles(cut_path_raw, cut_ass_path, cut_path)
             except Exception as burn_err:
@@ -477,7 +494,9 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
                 zoom_effect=zoom_effect,
                 bg_music_path=bg_music_path,
                 transition=transition_style,
-                transition_duration=transition_duration
+                transition_duration=transition_duration,
+                animation=animation,
+                fade_ms=fade_ms
             )
             cut_paths["custom"] = custom_path
 
@@ -503,7 +522,9 @@ def render_final_cuts(project_id, filename, original_video_path, segments, style
                 zoom_effect=zoom_effect,
                 bg_music_path=bg_music_path,
                 transition=transition_style,
-                transition_duration=transition_duration
+                transition_duration=transition_duration,
+                animation=animation,
+                fade_ms=fade_ms
             )
             cut_paths["custom_raw"] = custom_path_raw
 

@@ -269,6 +269,29 @@ with col_left:
         database.update_setting("transition_style", transition_style)
         database.update_setting("transition_duration", str(transition_duration))
 
+        st.subheader("✨ Caption Animation")
+        _anim_options = ["none", "fade", "pop", "bounce"]
+        _cur_anim = database.get_setting("subtitle_animation", "none")
+        if _cur_anim not in _anim_options:
+            _anim_options.insert(0, _cur_anim)
+        subtitle_animation = st.selectbox(
+            "Caption entrance / exit animation",
+            _anim_options,
+            index=_anim_options.index(_cur_anim),
+            help="Applied as each caption group appears. 'pop'/'bounce' scale in; all fade."
+        )
+        try:
+            _cur_fade = int(float(database.get_setting("subtitle_fade_ms", "150")))
+        except (TypeError, ValueError):
+            _cur_fade = 150
+        subtitle_fade_ms = st.slider(
+            "Fade duration (ms)",
+            min_value=0, max_value=400, value=min(max(_cur_fade, 0), 400), step=10,
+            disabled=(subtitle_animation == "none")
+        )
+        database.update_setting("subtitle_animation", subtitle_animation)
+        database.update_setting("subtitle_fade_ms", str(subtitle_fade_ms))
+
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state.status == "idle":
             if st.button("🚀 Run AI Slicing & Transcription"):

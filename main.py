@@ -1017,6 +1017,8 @@ def get_system_settings():
         "whisper_prompt": whisper_prompt,
         "transition_style": database.get_setting("transition_style", "fade"),
         "transition_duration": database.get_setting("transition_duration", "0.4"),
+        "subtitle_animation": database.get_setting("subtitle_animation", "none"),
+        "subtitle_fade_ms": database.get_setting("subtitle_fade_ms", "150"),
         "agent_notes": agent_notes
     }
 

@@ -238,8 +238,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     return header
 
-def generate_ass_file(segments, style_preset, output_path, font_family="Montserrat"):
-    """Generates an ASS subtitle file with dynamic word highlight styling."""
+def _anim_prefix(animation, fade_ms, is_first, is_last):
+    """
+    Builds an ASS override block for caption entrance/exit animation.
+
+    Captions are rendered as one Dialogue event per word (for the moving word
+    highlight), so a per-line fade would flicker every word. Instead we fade IN
+    only on a group's first word and OUT only on its last, and apply any scale
+    "pop"/"bounce" entrance only on the first word.
+
+    Supported: "none", "fade", "pop", "bounce". (Scale-based entrances are
+    center-anchored so they don't disturb the configured alignment/margins.)
+    """
+    animation = (animation or "none").strip().lower()
+    if animation == "none":
+        return ""
+    try:
+        fm = max(0, int(fade_ms or 0))
+    except (TypeError, ValueError):
+        fm = 0
+
+    tags = []
+    fade_in = fm if is_first else 0
+    fade_out = fm if is_last else 0
+    if fm > 0 and (fade_in or fade_out):
+        tags.append(f"\\fad({fade_in},{fade_out})")
+    if is_first:
+        if animation == "pop":
+            tags.append("\\fscx70\\fscy70\\t(0,130,\\fscx100\\fscy100)")
+        elif animation == "bounce":
+            tags.append("\\fscx55\\fscy55\\t(0,90,\\fscx112\\fscy112)\\t(90,180,\\fscx100\\fscy100)")
+
+    return "{" + "".join(tags) + "}" if tags else ""
+
+
+def generate_ass_file(segments, style_preset, output_path, font_family="Montserrat", animation="none", fade_ms=0):
+    """
+    Generates an ASS subtitle file with dynamic word highlight styling and an
+    optional caption entrance/exit animation (see _anim_prefix).
+    """
     content = get_ass_header(style_preset, font_family=font_family)
 
     if isinstance(style_preset, dict):
@@ -282,13 +319,15 @@ def generate_ass_file(segments, style_preset, output_path, font_family="Montserr
                         text_parts.append(word_text)
 
                 text_line = " ".join(text_parts).strip()
-                content += f"Dialogue: 0,{start_t},{end_t},Default,,0,0,0,,{text_line}\n"
+                anim = _anim_prefix(animation, fade_ms, w_idx == 0, w_idx == len(words) - 1)
+                content += f"Dialogue: 0,{start_t},{end_t},Default,,0,0,0,,{anim}{text_line}\n"
         else:
             # Fallback if word-level data is missing
             start = format_ass_time(seg["start"])
             end = format_ass_time(seg["end"])
             text = seg["text"].strip().replace("\n", " ")
-            content += f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}\n"
+            anim = _anim_prefix(animation, fade_ms, True, True)
+            content += f"Dialogue: 0,{start},{end},Default,,0,0,0,,{anim}{text}\n"
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -711,7 +750,7 @@ def make_semantic_cut(video_path, segments_map, target_duration, output_path, se
         return output_path, {"slices": slices, "use_xfade": use_xfade, "trans_d": trans_d}
     return output_path
 
-def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None):
+def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segments, style_preset, output_path, font_family="Montserrat", zoom_effect=1, bg_music_path=None, target_duration=None, transition=None, transition_duration=None, total_dur=None, animation="none", fade_ms=0):
     """
     Slices segments, concatenates them in custom order, shifts subtitles (including word timestamps), and burns them.
 
@@ -847,7 +886,7 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
     if not slices:
         # Fallback to direct copy
         ass_path = output_path + ".ass"
-        generate_ass_file(subtitle_segments, style_preset, ass_path, font_family=font_family)
+        generate_ass_file(subtitle_segments, style_preset, ass_path, font_family=font_family, animation=animation, fade_ms=fade_ms)
         return render_subtitles(video_path, ass_path, output_path)
 
     # Decide the transition plan from the final clip durations. This single
@@ -942,7 +981,7 @@ def render_custom_reordered_cut(video_path, segments_map, order, subtitle_segmen
     # Generate shifted subtitles ASS file
     if subtitle_segments:
         ass_path = output_path + ".ass"
-        generate_ass_file(shifted_subtitles, style_preset, ass_path, font_family=font_family)
+        generate_ass_file(shifted_subtitles, style_preset, ass_path, font_family=font_family, animation=animation, fade_ms=fade_ms)
 
         # Burn subtitles onto the reordered video
         try:
